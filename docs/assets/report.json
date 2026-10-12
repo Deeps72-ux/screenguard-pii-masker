@@ -103,8 +103,8 @@
     }
   ],
   "files": {
-    "original": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/original/capture_20261012_210022_352.png",
-    "masked": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/masked/capture_20261012_210022_352_masked.png",
-    "comparison": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/comparison/capture_20261012_210022_352_comparison.png"
+    "original": "output/original/capture_20261012_210022_352.png",
+    "masked": "output/masked/capture_20261012_210022_352_masked.png",
+    "comparison": "output/comparison/capture_20261012_210022_352_comparison.png"
   }
 }
