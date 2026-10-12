@@ -1,0 +1,110 @@
+{
+  "captureId": "capture_20261012_210022_352",
+  "timestamp": "2026-10-12T15:30:22.3520000\u002B00:00",
+  "inputSource": "Synthetic Benchmark",
+  "clickCoordinates": {
+    "x": 600,
+    "y": 350
+  },
+  "dimensions": {
+    "width": 1200,
+    "height": 700
+  },
+  "piiSummary": {
+    "totalDetected": 8,
+    "types": {
+      "SSN": 2,
+      "Email": 2,
+      "IPAddress": 2,
+      "DateOfBirth": 1,
+      "Phone": 1
+    }
+  },
+  "piiRegions": [
+    {
+      "type": "SSN",
+      "maskedPreview": "12*******89",
+      "boundingBox": {
+        "x": 51,
+        "y": 115,
+        "width": 346,
+        "height": 69
+      }
+    },
+    {
+      "type": "Email",
+      "maskedPreview": "al****************************io",
+      "boundingBox": {
+        "x": 51,
+        "y": 165,
+        "width": 454,
+        "height": 69
+      }
+    },
+    {
+      "type": "IPAddress",
+      "maskedPreview": "19*********05",
+      "boundingBox": {
+        "x": 51,
+        "y": 315,
+        "width": 334,
+        "height": 75
+      }
+    },
+    {
+      "type": "IPAddress",
+      "maskedPreview": "19*********05",
+      "boundingBox": {
+        "x": 51,
+        "y": 361,
+        "width": 259,
+        "height": 69
+      }
+    },
+    {
+      "type": "DateOfBirth",
+      "maskedPreview": "01******85",
+      "boundingBox": {
+        "x": 51,
+        "y": 415,
+        "width": 244,
+        "height": 69
+      }
+    },
+    {
+      "type": "SSN",
+      "maskedPreview": "12*******89",
+      "boundingBox": {
+        "x": 51,
+        "y": 165,
+        "width": 260,
+        "height": 65
+      }
+    },
+    {
+      "type": "Email",
+      "maskedPreview": "al****************************io",
+      "boundingBox": {
+        "x": 51,
+        "y": 215,
+        "width": 454,
+        "height": 69
+      }
+    },
+    {
+      "type": "Phone",
+      "maskedPreview": "55*********78",
+      "boundingBox": {
+        "x": 51,
+        "y": 265,
+        "width": 295,
+        "height": 65
+      }
+    }
+  ],
+  "files": {
+    "original": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/original/capture_20261012_210022_352.png",
+    "masked": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/masked/capture_20261012_210022_352_masked.png",
+    "comparison": "/Users/deepanks/Documents/Work/SkanAIProject/app/output/comparison/capture_20261012_210022_352_comparison.png"
+  }
+}

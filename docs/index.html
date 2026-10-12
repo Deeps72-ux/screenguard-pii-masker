@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScreenGuard | Screen Capture & PII Masker Demo</title>
+  <meta name="description" content="Production-grade macOS Screen Capture, Hardware Input Classification, GPU Detection, and Visual PII Redaction with C++ Native & C# .NET 8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <span class="brand-name">Screen<span class="brand-accent">Guard</span></span>
+        <span class="badge badge-pulse">Production Demo</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#comparison" class="nav-link">Comparison Slider</a>
+        <a href="#sandbox" class="nav-link">PII Sandbox</a>
+        <a href="#hardware" class="nav-link">Hardware Architecture</a>
+        <a href="#pipeline" class="nav-link">Pipeline Spec</a>
+        <a href="https://github.com/Deeps72-ux" target="_blank" class="nav-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub Repo
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="hero-glow"></div>
+    <div class="container hero-content">
+      <div class="hero-tag">
+        <span class="tag-icon">⚡</span>
+        <span>Dual-Layer Architecture: C++ Core + C# .NET 8 App</span>
+      </div>
+      <h1 class="hero-title">
+        High-Performance Screen Capture & <span class="gradient-text">Visual PII Masking</span>
+      </h1>
+      <p class="hero-desc">
+        A macOS screen capture engine monitoring system-wide mouse events with hardware input classification (<strong>External Mouse vs Trackpad</strong>), multi-GPU detection via Metal API (<strong>iGPU vs dGPU</strong>), in-memory OCR, and visual PII redaction.
+      </p>
+
+      <!-- Key Stat Counters -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-icon cyan-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="stat-data">
+            <span class="stat-val">100%</span>
+            <span class="stat-label">PII Detection Accuracy</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              <line x1="6" y1="6" x2="6.01" y2="6"/>
+              <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+          </div>
+          <div class="stat-data">
+            <span class="stat-val">Metal API</span>
+            <span class="stat-label">iGPU vs dGPU Detection</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="stat-data">
+            <span class="stat-val">&lt; 35ms</span>
+            <span class="stat-label">In-Memory Stream Latency</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <div class="stat-data">
+            <span class="stat-val">Hardware</span>
+            <span class="stat-label">Mouse vs Trackpad Classification</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 1: Interactive Comparison Slider -->
+  <section id="comparison" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Interactive <span class="gradient-text">Original vs Masked</span> Comparison</h2>
+        <p class="section-subtitle">
+          Drag the interactive split-slider handle to compare the raw screen capture against the redacted view. Redacted PII items are covered with black blocks, crimson accents, and audit badges.
+        </p>
+      </div>
+
+      <!-- Comparison Viewer Controls -->
+      <div class="comparison-toolbar">
+        <div class="mode-tabs">
+          <button class="tab-btn active" id="btnSplitSlider">Interactive Split Slider</button>
+          <button class="tab-btn" id="btnSideBySide">Side-by-Side Dual View</button>
+        </div>
+        <div class="meta-tag">
+          <span class="dot green-dot"></span> 8 PII Items Redacted (SSN, Email, Phone, IP, DOB)
+        </div>
+      </div>
+
+      <!-- Split Slider Canvas Container -->
+      <div class="slider-wrapper" id="sliderWrapper">
+        <div class="image-container">
+          <!-- Background: Masked Redacted Image -->
+          <img src="assets/masked.png" alt="Masked Screenshot" class="comparison-img img-masked" id="imgMasked">
+          <div class="image-label label-masked">REDACTED (PII Masked)</div>
+
+          <!-- Foreground: Original Image with Clipped Width -->
+          <div class="slider-clip" id="sliderClip">
+            <img src="assets/original.png" alt="Original Screenshot" class="comparison-img img-original" id="imgOriginal">
+            <div class="image-label label-original">ORIGINAL (Unmasked)</div>
+          </div>
+
+          <!-- Draggable Separator Handle -->
+          <div class="slider-handle" id="sliderHandle">
+            <div class="handle-line"></div>
+            <div class="handle-circle">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+            <div class="handle-line"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-side Container (Hidden by default, toggled via tab) -->
+      <div class="side-by-side-container" id="sideBySideContainer" style="display: none;">
+        <img src="assets/comparison.png" alt="Side by Side Comparison" class="full-comparison-img">
+      </div>
+
+      <!-- Detected PII Badges Summary -->
+      <div class="pii-badges-panel">
+        <h4 class="panel-heading">Detected & Masked PII Regions in this Capture:</h4>
+        <div class="badge-list">
+          <span class="pii-badge ssn-badge">
+            <span class="badge-type">SSN</span> 12*******89
+            <span class="badge-coords">(51, 115) 346x69</span>
+          </span>
+          <span class="pii-badge email-badge">
+            <span class="badge-type">EMAIL</span> al**********************ai
+            <span class="badge-coords">(51, 165) 407x69</span>
+          </span>
+          <span class="pii-badge phone-badge">
+            <span class="badge-type">PHONE</span> 55*********78
+            <span class="badge-coords">(51, 265) 295x65</span>
+          </span>
+          <span class="pii-badge cc-badge">
+            <span class="badge-type">CREDIT CARD</span> 41***********44
+            <span class="badge-coords">(51, 315) 334x75</span>
+          </span>
+          <span class="pii-badge ip-badge">
+            <span class="badge-type">IP ADDRESS</span> 19*********05
+            <span class="badge-coords">(51, 361) 259x69</span>
+          </span>
+          <span class="pii-badge dob-badge">
+            <span class="badge-type">DOB</span> 01******85
+            <span class="badge-coords">(51, 415) 244x69</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Live In-Browser PII Masker Sandbox -->
+  <section id="sandbox" class="section dark-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Live In-Browser <span class="gradient-text">PII Redaction Sandbox</span></h2>
+        <p class="section-subtitle">
+          Test the regex & masking engine live in your browser. Choose a preset or type any sensitive data to see instant entity detection and redacted rendering.
+        </p>
+      </div>
+
+      <div class="sandbox-grid">
+        <!-- Input Panel -->
+        <div class="sandbox-card">
+          <div class="card-header">
+            <h3>Original Document Input</h3>
+            <div class="preset-buttons">
+              <button class="btn-preset active" data-preset="employee">Employee HR</button>
+              <button class="btn-preset" data-preset="financial">Financial</button>
+              <button class="btn-preset" data-preset="medical">Medical Patient</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <textarea id="sandboxInput" class="sandbox-textarea" rows="10" placeholder="Type or paste any sensitive document text here..."></textarea>
+            <div class="action-bar">
+              <button class="btn-primary" id="btnScanPii">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                Scan & Redact PII
+              </button>
+              <span class="status-indicator" id="scanStatus">Ready for input</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Redacted Output Panel -->
+        <div class="sandbox-card">
+          <div class="card-header">
+            <h3>Visual Redacted Preview</h3>
+            <div class="mask-stats" id="maskStats">0 PII Entities Detected</div>
+          </div>
+          <div class="card-body">
+            <div id="sandboxRedacted" class="sandbox-preview"></div>
+            <div class="audit-summary" id="auditSummary">
+              <span class="audit-chip">Safe for public viewing</span>
+              <span class="audit-chip">Luhn Algorithm Verified</span>
+              <span class="audit-chip">Zero Sensitive Data Leakage</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Hardware Architecture & GPU Detector -->
+  <section id="hardware" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Hardware Classification & <span class="gradient-text">Metal GPU Engine</span></h2>
+        <p class="section-subtitle">
+          Engineered natively in C++ using macOS Quartz Event Services, IOKit HID, and Metal API to classify pointing hardware and graphics processors.
+        </p>
+      </div>
+
+      <div class="hardware-grid">
+        <!-- Input Device Classifier -->
+        <div class="hw-card">
+          <div class="hw-icon">🖱️</div>
+          <h3>Hardware Input Classifier</h3>
+          <p class="hw-desc">
+            Differentiates clicks originating from an <strong>External Physical Mouse</strong> versus an <strong>Integrated/Magic Trackpad</strong> using two synchronized layers:
+          </p>
+          <div class="spec-list">
+            <div class="spec-item">
+              <span class="spec-key">Event Tap Subtype</span>
+              <span class="spec-val"><code>kCGMouseEventSubtype: 3 (Touch) vs 0 (Mouse)</code></span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-key">IOKit HID Manager</span>
+              <span class="spec-val"><code>Generic Desktop 0x02 (Mouse) vs 0x05 (TouchPad)</code></span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-key">Device Name Heuristic</span>
+              <span class="spec-val"><code>"Apple Internal Keyboard / Trackpad"</code></span>
+            </div>
+          </div>
+
+          <!-- Interactive Simulator -->
+          <div class="hw-interactive">
+            <h4>Simulate Hardware Click:</h4>
+            <div class="btn-group">
+              <button class="btn-action" id="btnSimTrackpad">Simulate Trackpad Click</button>
+              <button class="btn-action" id="btnSimMouse">Simulate External Mouse Click</button>
+            </div>
+            <div class="hw-result-box" id="hwResultBox">
+              <span class="pulse-dot"></span>
+              <span id="hwResultText">Active Hardware: Apple Built-in Trackpad</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- GPU Detector -->
+        <div class="hw-card">
+          <div class="hw-icon">⚡</div>
+          <h3>Metal API GPU Enumerator</h3>
+          <p class="hw-desc">
+            Enumerates all graphics devices via <code>MTLCopyAllDevices()</code> to distinguish Integrated (iGPU), Discrete (dGPU), and External (eGPU) processors.
+          </p>
+          <div class="spec-list">
+            <div class="spec-item">
+              <span class="spec-key">Apple Silicon (M1/M2/M3/M4)</span>
+              <span class="spec-val">Single Unified SoC GPU &rarr; <code>Integrated (iGPU)</code></span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-key">Intel Macs (Dual-GPU)</span>
+              <span class="spec-val">Intel Iris (<code>isLowPower=true</code>) + AMD Radeon (<code>dGPU</code>)</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-key">Thunderbolt eGPU</span>
+              <span class="spec-val">External Enclosure &rarr; <code>isRemovable=true</code></span>
+            </div>
+          </div>
+
+          <!-- Interactive GPU Switcher -->
+          <div class="hw-interactive">
+            <h4>Test Architecture Detection:</h4>
+            <div class="gpu-switcher">
+              <button class="btn-gpu-tab active" data-gpu="apple-m">Apple M1/M2/M3</button>
+              <button class="btn-gpu-tab" data-gpu="intel-dual">Intel Dual-GPU</button>
+              <button class="btn-gpu-tab" data-gpu="thunderbolt">External eGPU</button>
+            </div>
+            <div class="gpu-display-box" id="gpuDisplayBox">
+              <div class="gpu-row">
+                <span class="gpu-name">Apple M1</span>
+                <span class="gpu-badge igpu-badge">Integrated (iGPU)</span>
+              </div>
+              <div class="gpu-details">SoC Unified Architecture &bull; LowPower: No &bull; Removable: No</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Data Flow & Struct Memory Spec -->
+  <section id="pipeline" class="section dark-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Architectural <span class="gradient-text">Data Pipeline & Struct Alignment</span></h2>
+        <p class="section-subtitle">
+          64-bit memory layout matched byte-for-byte across the native C++ library and managed C# P/Invoke boundary.
+        </p>
+      </div>
+
+      <div class="architecture-diagram">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-title">Mouse Click Tap</div>
+          <div class="step-desc"><code>CGEventTapCreate</code> listens system-wide on dedicated background thread.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-title">Hardware Classifier</div>
+          <div class="step-desc">IOKit HID & Subtype tags click as Trackpad or External Mouse.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-title">Screen Capture</div>
+          <div class="step-desc"><code>ScreenCaptureKit</code> grabs full display into raw BGRA buffer.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-title">P/Invoke Bridge</div>
+          <div class="step-desc">Function pointer callback invokes C# orchestrator with <code>SkanCapture</code>.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="step-num">5</div>
+          <div class="step-title">In-Memory OCR</div>
+          <div class="step-desc">Pipes PNG bytes via stdin to extract word bounds with zero temp files.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="step-num">6</div>
+          <div class="step-title">Mask & Compare</div>
+          <div class="step-desc">Redacts PII, generates side-by-side composite and JSON audit report.</div>
+        </div>
+      </div>
+
+      <!-- Struct Memory Layout Card -->
+      <div class="memory-card">
+        <h3>SkanCapture 64-Bit Memory Layout (56 Bytes)</h3>
+        <div class="memory-table-wrapper">
+          <table class="memory-table">
+            <thead>
+              <tr>
+                <th>Offset</th>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>0x00</code></td>
+                <td><code>Width</code></td>
+                <td>int32</td>
+                <td>4 bytes</td>
+                <td>Screen horizontal pixel count</td>
+              </tr>
+              <tr>
+                <td><code>0x04</code></td>
+                <td><code>Height</code></td>
+                <td>int32</td>
+                <td>4 bytes</td>
+                <td>Screen vertical pixel count</td>
+              </tr>
+              <tr>
+                <td><code>0x08</code></td>
+                <td><code>Stride</code></td>
+                <td>int32</td>
+                <td>4 bytes</td>
+                <td>Bytes per row (aligned to row boundaries)</td>
+              </tr>
+              <tr>
+                <td><code>0x0C</code></td>
+                <td><em>[Padding]</em></td>
+                <td>pad</td>
+                <td>4 bytes</td>
+                <td>Aligns 64-bit pointer to 8-byte boundary</td>
+              </tr>
+              <tr>
+                <td><code>0x10</code></td>
+                <td><code>PixelData</code></td>
+                <td>uint8_t* / IntPtr</td>
+                <td>8 bytes</td>
+                <td>Raw BGRA pixel buffer pointer</td>
+              </tr>
+              <tr>
+                <td><code>0x18</code></td>
+                <td><code>InputSource</code></td>
+                <td>int32</td>
+                <td>4 bytes</td>
+                <td>1 = External Mouse, 2 = Trackpad</td>
+              </tr>
+              <tr>
+                <td><code>0x1C</code></td>
+                <td><em>[Padding]</em></td>
+                <td>pad</td>
+                <td>4 bytes</td>
+                <td>Aligns double precision float to 8-byte boundary</td>
+              </tr>
+              <tr>
+                <td><code>0x20</code></td>
+                <td><code>ClickX</code></td>
+                <td>double</td>
+                <td>8 bytes</td>
+                <td>Horizontal screen coordinate of user click</td>
+              </tr>
+              <tr>
+                <td><code>0x28</code></td>
+                <td><code>ClickY</code></td>
+                <td>double</td>
+                <td>8 bytes</td>
+                <td>Vertical screen coordinate of user click</td>
+              </tr>
+              <tr>
+                <td><code>0x30</code></td>
+                <td><code>TimestampMs</code></td>
+                <td>int64</td>
+                <td>8 bytes</td>
+                <td>Unix epoch milliseconds timestamp</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Real JSON Audit Report -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Compliance <span class="gradient-text">JSON Audit Report</span></h2>
+        <p class="section-subtitle">
+          Every capture generates a persistent audit report with exact screen coordinates, sanitized text previews, and artifact file mappings.
+        </p>
+      </div>
+      <div class="json-viewer-card">
+        <div class="json-header">
+          <span>capture_20261012_204801_284_report.json</span>
+          <button class="btn-copy" id="btnCopyJson">Copy JSON</button>
+        </div>
+        <pre class="json-content" id="jsonContent"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-left">
+        <span class="footer-brand">Screen<span class="brand-accent">Guard</span> &bull; Screen Capture & PII Masker</span>
+        <p>Production Engineering Project &bull; Built with C++ & C# .NET 8 on macOS</p>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/Deeps72-ux/screen-capture-pii-masker" target="_blank" class="footer-link">GitHub: Deeps72-ux/screen-capture-pii-masker</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

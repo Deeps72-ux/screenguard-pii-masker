@@ -1,0 +1,31 @@
+# .gitignore for SkanAIProject
+
+# Native Build Artifacts
+native/build/
+*.dylib
+*.o
+*.a
+*.ninja
+.DS_Store
+
+# .NET Build Artifacts
+**/bin/
+**/obj/
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+
+# OCR Trained Data (downloaded automatically via scripts)
+tessdata/*.traineddata
+
+# Local Output Directories
+output/
+app/output/
+test_pii.png
+*.log
+
+# IDE
+.vscode/
+.idea/

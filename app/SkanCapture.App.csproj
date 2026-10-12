@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SkanCapture.App</RootNamespace>
+    <AssemblyName>SkanCapture</AssemblyName>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SkiaSharp for image processing (cross-platform, no System.Drawing dependency) -->
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="2.88.8" />
+
+    <!-- Tesseract OCR for text extraction from screenshots -->
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy native library to output directory -->
+    <None Include="libscreencapture.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('libscreencapture.dylib')" />
+
+    <!-- Copy tessdata directory to output -->
+    <None Include="../tessdata/**"
+          CopyToOutputDirectory="PreserveNewest"
+          LinkBase="tessdata" />
+  </ItemGroup>
+
+</Project>
