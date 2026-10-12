@@ -17,7 +17,7 @@ using System.Runtime.InteropServices;
 using SkiaSharp;
 using Tesseract;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Result from OCR text extraction, including text content, bounding box, and confidence.
@@ -255,7 +255,7 @@ public class OcrEngine : IDisposable
         var results = new List<OcrResult>();
         if (_nativeEngine == null) return results;
 
-        string tempPng = Path.Combine(Path.GetTempPath(), $"skan_ocr_{Guid.NewGuid():N}.png");
+        string tempPng = Path.Combine(Path.GetTempPath(), $"screenguard_ocr_{Guid.NewGuid():N}.png");
 
         try
         {

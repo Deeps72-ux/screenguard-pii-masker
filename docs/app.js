@@ -1,6 +1,6 @@
 /**
  * app.js
- * Interactive logic for the Skan-AI Production Demo application.
+ * Interactive logic for the ScreenGuard Production Demo application.
  */
 
 document.addEventListener('DOMContentLoaded', () => {

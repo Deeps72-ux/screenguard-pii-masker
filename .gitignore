@@ -1,4 +1,4 @@
-# .gitignore for SkanAIProject
+# .gitignore for screenguard-pii-masker
 
 # Native Build Artifacts
 native/build/
@@ -29,3 +29,7 @@ test_pii.png
 # IDE
 .vscode/
 .idea/
+
+docs/HLD.md
+docs/LLD.md
+docs/DEMO_GUIDE.md

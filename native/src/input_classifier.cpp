@@ -51,7 +51,7 @@ bool InputClassifier::start() {
 void InputClassifier::runLoopThread() {
     m_hidManager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
     if (!m_hidManager) {
-        std::cerr << "[SkanCapture] ERROR: Failed to create IOHIDManager." << std::endl;
+        std::cerr << "[ScreenGuard] ERROR: Failed to create IOHIDManager." << std::endl;
         m_running.store(false);
         return;
     }
@@ -104,7 +104,7 @@ void InputClassifier::runLoopThread() {
     IOHIDManagerScheduleWithRunLoop(m_hidManager, m_runLoop, kCFRunLoopDefaultMode);
     IOHIDManagerOpen(m_hidManager, kIOHIDOptionsTypeNone);
 
-    std::cout << "[SkanCapture] Input classifier started (IOKit HID Manager)." << std::endl;
+    std::cout << "[ScreenGuard] Input classifier started (IOKit HID Manager)." << std::endl;
 
     // Release CF objects (manager retains what it needs)
     CFRelease(matchingArray);
@@ -140,7 +140,7 @@ void InputClassifier::stop() {
         m_thread.join();
     }
 
-    std::cout << "[SkanCapture] Input classifier stopped." << std::endl;
+    std::cout << "[ScreenGuard] Input classifier stopped." << std::endl;
 }
 
 InputSource InputClassifier::getLastInputSource() const {
@@ -254,7 +254,7 @@ void InputClassifier::deviceMatchedCallback(void* context, IOReturn result,
         default: break;
     }
 
-    std::cout << "[SkanCapture] HID device connected: \"" << info.name
+    std::cout << "[ScreenGuard] HID device connected: \"" << info.name
               << "\" → classified as: " << typeStr << std::endl;
 }
 
@@ -282,7 +282,7 @@ void InputClassifier::deviceRemovedCallback(void* context, IOReturn result,
     }
 
     if (!removedName.empty()) {
-        std::cout << "[SkanCapture] HID device disconnected: \"" << removedName << "\"" << std::endl;
+        std::cout << "[ScreenGuard] HID device disconnected: \"" << removedName << "\"" << std::endl;
     }
 }
 

@@ -12,7 +12,7 @@
 
 using SkiaSharp;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Handles writing captured images and comparison artifacts to disk.

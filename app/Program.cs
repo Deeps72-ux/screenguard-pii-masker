@@ -1,6 +1,6 @@
 /**
  * Program.cs
- * Production-grade entry point for the Skan-AI Screen Capture & PII Masker application.
+ * Production-grade entry point for the ScreenGuard Screen Capture & PII Masker application.
  *
  * Architecture:
  *   Native C++ Layer (libscreencapture.dylib):
@@ -22,11 +22,11 @@
 
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using SkanCapture.App.Interop;
-using SkanCapture.App.Models;
-using SkanCapture.App.Services;
+using ScreenGuard.App.Interop;
+using ScreenGuard.App.Models;
+using ScreenGuard.App.Services;
 
-namespace SkanCapture.App;
+namespace ScreenGuard.App;
 
 class Program
 {
@@ -93,14 +93,14 @@ class Program
         }
 
         // ── Initialize Native C++ Layer ─────────────────────────────────
-        NativeInterop.SkanCaptureCallback callback = OnCapture;
+        NativeInterop.ScreenGuardCaptureCallback callback = OnCapture;
         GCHandle callbackHandle = GCHandle.Alloc(callback);
 
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("[*] Initializing native C++ layer (libscreencapture.dylib)...");
         Console.ResetColor();
 
-        int result = NativeInterop.SkanInit(callback);
+        int result = NativeInterop.ScreenGuardInit(callback);
         if (result != 0)
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -120,7 +120,7 @@ class Program
         if (testMode)
         {
             RunSingleCaptureTest();
-            NativeInterop.SkanShutdown();
+            NativeInterop.ScreenGuardShutdown();
             callbackHandle.Free();
             _ocrEngine?.Dispose();
             PrintSessionSummary();
@@ -162,7 +162,7 @@ class Program
         Console.WriteLine("\n[*] Shutting down native monitoring...");
         Console.ResetColor();
 
-        NativeInterop.SkanShutdown();
+        NativeInterop.ScreenGuardShutdown();
         callbackHandle.Free();
         _ocrEngine?.Dispose();
 
@@ -176,7 +176,7 @@ class Program
     {
         try
         {
-            var capture = Marshal.PtrToStructure<NativeInterop.SkanCaptureStruct>(capturePtr);
+            var capture = Marshal.PtrToStructure<NativeInterop.ScreenGuardCaptureStruct>(capturePtr);
             int count = Interlocked.Increment(ref _captureCount);
 
             string inputSource = capture.InputSource switch
@@ -218,7 +218,7 @@ class Program
         finally
         {
             // CRITICAL: Always free native memory
-            NativeInterop.SkanFreeCapture(capturePtr);
+            NativeInterop.ScreenGuardFreeCapture(capturePtr);
         }
     }
 
@@ -326,26 +326,26 @@ class Program
     }
 
     /// <summary>
-    /// Runs a single screen capture test using SkanCaptureNow().
+    /// Runs a single screen capture test using ScreenGuardCaptureNow().
     /// </summary>
     private static void RunSingleCaptureTest()
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("\n[*] Executing single test screen capture via SkanCaptureNow()...");
+        Console.WriteLine("\n[*] Executing single test screen capture via ScreenGuardCaptureNow()...");
         Console.ResetColor();
 
-        IntPtr capturePtr = NativeInterop.SkanCaptureNow();
+        IntPtr capturePtr = NativeInterop.ScreenGuardCaptureNow();
         if (capturePtr == IntPtr.Zero)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[✗] SkanCaptureNow() returned null.");
+            Console.WriteLine("[✗] ScreenGuardCaptureNow() returned null.");
             Console.ResetColor();
             return;
         }
 
         try
         {
-            var capture = Marshal.PtrToStructure<NativeInterop.SkanCaptureStruct>(capturePtr);
+            var capture = Marshal.PtrToStructure<NativeInterop.ScreenGuardCaptureStruct>(capturePtr);
             string inputSource = capture.InputSource switch
             {
                 1 => "External Mouse",
@@ -363,7 +363,7 @@ class Program
         }
         finally
         {
-            NativeInterop.SkanFreeCapture(capturePtr);
+            NativeInterop.ScreenGuardFreeCapture(capturePtr);
         }
     }
 
@@ -468,7 +468,7 @@ class Program
     /// </summary>
     private static void PrintGpuInfo()
     {
-        int count = NativeInterop.SkanGetGpuCount();
+        int count = NativeInterop.ScreenGuardGetGpuCount();
         if (count <= 0) return;
 
         Console.ForegroundColor = ConsoleColor.Cyan;
@@ -478,7 +478,7 @@ class Program
 
         for (int i = 0; i < count; i++)
         {
-            if (NativeInterop.SkanGetGpuInfo(i, out var info) == 0)
+            if (NativeInterop.ScreenGuardGetGpuInfo(i, out var info) == 0)
             {
                 string typeStr = info.Type switch
                 {

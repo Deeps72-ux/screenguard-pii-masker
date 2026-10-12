@@ -1,6 +1,6 @@
 /**
- * @file skan_api.h
- * @brief Skan-AI Screen Capture Native API
+ * @file screenguard_api.h
+ * @brief ScreenGuard Screen Capture Native API
  *
  * Public C API for the screen capture library. This header defines all
  * exported functions, structures, and callback types that the C# application
@@ -11,8 +11,8 @@
  *   C# (application)   → receives captures via callback, performs OCR/PII masking, saves to disk
  */
 
-#ifndef SKAN_API_H
-#define SKAN_API_H
+#ifndef SCREENGUARD_API_H
+#define SCREENGUARD_API_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -26,14 +26,14 @@ extern "C" {
 /* ──────────────────────────────────────────────────────────────────────────── */
 
 /** Input source classification */
-#define SKAN_INPUT_UNKNOWN          0
-#define SKAN_INPUT_EXTERNAL_MOUSE   1
-#define SKAN_INPUT_TRACKPAD         2
+#define SG_INPUT_UNKNOWN          0
+#define SG_INPUT_EXTERNAL_MOUSE   1
+#define SG_INPUT_TRACKPAD         2
 
 /** GPU type classification */
-#define SKAN_GPU_INTEGRATED         0
-#define SKAN_GPU_DISCRETE           1
-#define SKAN_GPU_EXTERNAL           2
+#define SG_GPU_INTEGRATED         0
+#define SG_GPU_DISCRETE           1
+#define SG_GPU_EXTERNAL           2
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 /*  Structures                                                                 */
@@ -59,19 +59,19 @@ typedef struct {
     int         height;
     int         stride;         /**< Bytes per row (may include padding) */
     uint8_t*    pixelData;      /**< Raw BGRA pixel buffer (malloc'd) */
-    int         inputSource;    /**< SKAN_INPUT_* constant */
+    int         inputSource;    /**< SG_INPUT_* constant */
     double      clickX;         /**< Screen X coordinate of click */
     double      clickY;         /**< Screen Y coordinate of click */
     int64_t     timestampMs;    /**< Unix epoch milliseconds */
-} SkanCapture;
+} ScreenGuardCapture;
 
 /**
  * GPU device information.
  */
 typedef struct {
     char    name[256];          /**< GPU device name (null-terminated) */
-    int     type;               /**< SKAN_GPU_* constant */
-} SkanGpuInfo;
+    int     type;               /**< SG_GPU_* constant */
+} ScreenGuardGpuInfo;
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 /*  Callback Type                                                              */
@@ -79,12 +79,12 @@ typedef struct {
 
 /**
  * Callback invoked by the native layer on each mouse click capture.
- * The C# application registers this via SkanInit().
+ * The C# application registers this via ScreenGuardInit().
  *
  * @param capture  Pointer to the capture data. The callee MUST call
- *                 SkanFreeCapture() when finished processing.
+ *                 ScreenGuardFreeCapture() when finished processing.
  */
-typedef void (*SkanCaptureCallback)(SkanCapture* capture);
+typedef void (*ScreenGuardCaptureCallback)(ScreenGuardCapture* capture);
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 /*  API Functions                                                              */
@@ -100,50 +100,50 @@ typedef void (*SkanCaptureCallback)(SkanCapture* capture);
  *          -2 = failed to start mouse monitor (check Input Monitoring permissions)
  */
 __attribute__((visibility("default")))
-int SkanInit(SkanCaptureCallback callback);
+int ScreenGuardInit(ScreenGuardCaptureCallback callback);
 
 /**
  * Shut down the capture system and release all resources.
  */
 __attribute__((visibility("default")))
-void SkanShutdown(void);
+void ScreenGuardShutdown(void);
 
 /**
  * Get the number of detected GPU devices.
- * Must be called after SkanInit().
+ * Must be called after ScreenGuardInit().
  */
 __attribute__((visibility("default")))
-int SkanGetGpuCount(void);
+int ScreenGuardGetGpuCount(void);
 
 /**
  * Get information about a specific GPU device.
  *
- * @param index  Zero-based GPU index (0 to SkanGetGpuCount()-1).
- * @param out    Pointer to a SkanGpuInfo struct to fill.
+ * @param index  Zero-based GPU index (0 to ScreenGuardGetGpuCount()-1).
+ * @param out    Pointer to a ScreenGuardGpuInfo struct to fill.
  * @return  0 on success, -1 on invalid index or null pointer.
  */
 __attribute__((visibility("default")))
-int SkanGetGpuInfo(int index, SkanGpuInfo* out);
+int ScreenGuardGetGpuInfo(int index, ScreenGuardGpuInfo* out);
 
 /**
  * Perform an immediate screen capture (for testing).
- * The caller must free the result with SkanFreeCapture().
+ * The caller must free the result with ScreenGuardFreeCapture().
  *
  * @return  Pointer to capture data, or NULL on failure.
  */
 __attribute__((visibility("default")))
-SkanCapture* SkanCaptureNow(void);
+ScreenGuardCapture* ScreenGuardCaptureNow(void);
 
 /**
- * Free a SkanCapture struct and its pixel buffer.
+ * Free a ScreenGuardCapture struct and its pixel buffer.
  *
  * @param capture  Pointer to capture data to free. Safe to pass NULL.
  */
 __attribute__((visibility("default")))
-void SkanFreeCapture(SkanCapture* capture);
+void ScreenGuardFreeCapture(ScreenGuardCapture* capture);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* SKAN_API_H */
+#endif /* SCREENGUARD_API_H */

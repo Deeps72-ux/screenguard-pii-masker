@@ -100,10 +100,10 @@ Before starting your screen recording:
   > * *Strict local-only processing guaranteeing zero data leakage.*
   >
   > *In the **LLD**, we detail the precise 64-bit Darwin ABI memory layout:*
-  > * *The `SkanCapture` struct is exactly 56 bytes, with padding fields at offset 12 and offset 28 ensuring 8-byte pointer and double alignment across C++ and C# P/Invoke.*
+  > * *The `ScreenGuardCapture` struct is exactly 56 bytes, with padding fields at offset 12 and offset 28 ensuring 8-byte pointer and double alignment across C++ and C# P/Invoke.*
   > * *Our streaming OCR pipeline avoids writing temporary files to disk, piping PNG bytes in memory directly to Tesseract's `stdin` and parsing TSV coordinates from `stdout`.*
   > * *Our regex engine incorporates negative lookaheads for SSA invalid SSN prefixes and Luhn Modulo 10 verification for credit cards to prevent false positives.*
-  > * *Memory lifecycle is strictly managed: C# frees the native heap using `SkanFreeCapture()` in a `finally` block to prevent leaks."*
+  > * *Memory lifecycle is strictly managed: C# frees the native heap using `ScreenGuardFreeCapture()` in a `finally` block to prevent leaks."*
 
 ---
 

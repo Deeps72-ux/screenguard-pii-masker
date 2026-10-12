@@ -47,20 +47,20 @@ classDiagram
         +printGPUInfo() void
     }
 
-    class SkanApi {
+    class ScreenGuardApi {
         <<C Export API>>
-        +SkanInit(callback) int
-        +SkanShutdown() void
-        +SkanGetGpuCount() int
-        +SkanGetGpuInfo(index, out) int
-        +SkanCaptureNow() SkanCapture*
-        +SkanFreeCapture(capture) void
+        +ScreenGuardInit(callback) int
+        +ScreenGuardShutdown() void
+        +ScreenGuardGetGpuCount() int
+        +ScreenGuardGetGpuInfo(index, out) int
+        +ScreenGuardCaptureNow() ScreenGuardCapture*
+        +ScreenGuardFreeCapture(capture) void
     }
 
-    MouseMonitor --> SkanApi
-    InputClassifier --> SkanApi
-    ScreenCapture --> SkanApi
-    GpuDetector --> SkanApi
+    MouseMonitor --> ScreenGuardApi
+    InputClassifier --> ScreenGuardApi
+    ScreenCapture --> ScreenGuardApi
+    GpuDetector --> ScreenGuardApi
 ```
 
 ### 1.2 Managed C# .NET 8 Subsystems
@@ -68,12 +68,12 @@ classDiagram
 classDiagram
     class NativeInterop {
         <<static>>
-        +SkanInit(callback) int
-        +SkanShutdown() void
-        +SkanGetGpuCount() int
-        +SkanGetGpuInfo(index, out) int
-        +SkanCaptureNow() IntPtr
-        +SkanFreeCapture(ptr) void
+        +ScreenGuardInit(callback) int
+        +ScreenGuardShutdown() void
+        +ScreenGuardGetGpuCount() int
+        +ScreenGuardGetGpuInfo(index, out) int
+        +ScreenGuardCaptureNow() IntPtr
+        +ScreenGuardFreeCapture(ptr) void
     }
 
     class ImageConverter {
@@ -135,7 +135,7 @@ classDiagram
 
 A critical technical challenge in unmanaged/managed interop is matching the exact memory alignment mandated by the 64-bit Darwin ABI.
 
-### 2.1 `SkanCapture` Memory Alignment Table (56 Bytes)
+### 2.1 `ScreenGuardCapture` Memory Alignment Table (56 Bytes)
 ```
 Offset (Hex)  Offset (Dec)  Size   Type               Field Name     Padding Note
 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ Offset (Hex)  Offset (Dec)  Size   Type               Field Name     Padding Not
 Total Struct Size: 56 Bytes (0x38)
 ```
 
-#### Native Definition (`native/include/skan_api.h`)
+#### Native Definition (`native/include/screenguard_api.h`)
 ```c
 typedef struct {
     int         width;          // Offset 0
@@ -164,13 +164,13 @@ typedef struct {
     double      clickX;         // Offset 32 (4 bytes padding before)
     double      clickY;         // Offset 40
     int64_t     timestampMs;    // Offset 48
-} SkanCapture;
+} ScreenGuardCapture;
 ```
 
 #### Managed Binding (`app/Interop/NativeInterop.cs`)
 ```csharp
 [StructLayout(LayoutKind.Sequential)]
-public struct SkanCaptureStruct
+public struct ScreenGuardCaptureStruct
 {
     public int    Width;       // Offset 0
     public int    Height;      // Offset 4
@@ -185,22 +185,22 @@ public struct SkanCaptureStruct
 
 ---
 
-## 3. C API Export Interface (`skan_api.h`)
+## 3. C API Export Interface (`screenguard_api.h`)
 
 All exported functions use C linkage (`extern "C"`) and default visibility attributes:
 
 ```cpp
 // Lifecycle Management
-int  SkanInit(SkanCaptureCallback callback);  // Returns 0 on success, <0 on error
-void SkanShutdown(void);                      // Stops all threads, releases run loops
+int  ScreenGuardInit(ScreenGuardCaptureCallback callback);  // Returns 0 on success, <0 on error
+void ScreenGuardShutdown(void);                      // Stops all threads, releases run loops
 
 // Hardware Query
-int  SkanGetGpuCount(void);                   // Returns count of Metal GPU devices
-int  SkanGetGpuInfo(int index, SkanGpuInfo* out); // Fills name & type (0=iGPU, 1=dGPU, 2=eGPU)
+int  ScreenGuardGetGpuCount(void);                   // Returns count of Metal GPU devices
+int  ScreenGuardGetGpuInfo(int index, ScreenGuardGpuInfo* out); // Fills name & type (0=iGPU, 1=dGPU, 2=eGPU)
 
 // Capture & Memory Lifecycle
-SkanCapture* SkanCaptureNow(void);            // Manual trigger for testing
-void SkanFreeCapture(SkanCapture* capture);    // Releases raw pixelData and struct memory
+ScreenGuardCapture* ScreenGuardCaptureNow(void);            // Manual trigger for testing
+void ScreenGuardFreeCapture(ScreenGuardCapture* capture);    // Releases raw pixelData and struct memory
 ```
 
 ---
@@ -219,9 +219,9 @@ void SkanFreeCapture(SkanCapture* capture);    // Releases raw pixelData and str
 
 ### 4.2 Managed Thread Safety & Garbage Collection
 1. **Callback Protection:**
-   The C# delegate passed to `SkanInit` is rooted using a pinned handle to prevent premature GC reclamation:
+   The C# delegate passed to `ScreenGuardInit` is rooted using a pinned handle to prevent premature GC reclamation:
    ```csharp
-   NativeInterop.SkanCaptureCallback callback = OnCapture;
+   NativeInterop.ScreenGuardCaptureCallback callback = OnCapture;
    GCHandle callbackHandle = GCHandle.Alloc(callback);
    ```
 2. **Atomic Counter:**

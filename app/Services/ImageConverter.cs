@@ -9,7 +9,7 @@
 
 using SkiaSharp;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Converts raw pixel buffers from the native C++ layer into SkiaSharp bitmaps.

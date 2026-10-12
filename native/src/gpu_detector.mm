@@ -77,12 +77,12 @@ std::vector<GpuDeviceInfo> GpuDetector::detectGPUs() {
 void GpuDetector::printGPUInfo() {
     auto gpus = detectGPUs();
 
-    std::cout << "[SkanCapture] ╔══════════════════════════════════════════╗" << std::endl;
-    std::cout << "[SkanCapture] ║          GPU Information                 ║" << std::endl;
-    std::cout << "[SkanCapture] ╠══════════════════════════════════════════╣" << std::endl;
+    std::cout << "[ScreenGuard] ╔══════════════════════════════════════════╗" << std::endl;
+    std::cout << "[ScreenGuard] ║          GPU Information                 ║" << std::endl;
+    std::cout << "[ScreenGuard] ╠══════════════════════════════════════════╣" << std::endl;
 
     if (gpus.empty()) {
-        std::cout << "[SkanCapture] ║  No Metal-compatible GPUs found.        ║" << std::endl;
+        std::cout << "[ScreenGuard] ║  No Metal-compatible GPUs found.        ║" << std::endl;
     } else {
         for (size_t i = 0; i < gpus.size(); i++) {
             const auto& gpu = gpus[i];
@@ -92,13 +92,13 @@ void GpuDetector::printGPUInfo() {
                 case GpuType::Discrete:   typeStr = "Discrete (dGPU)";   break;
                 case GpuType::External:   typeStr = "External (eGPU)";   break;
             }
-            std::cout << "[SkanCapture] ║  GPU " << i << ": " << gpu.name << std::endl;
-            std::cout << "[SkanCapture] ║    Type: " << typeStr
+            std::cout << "[ScreenGuard] ║  GPU " << i << ": " << gpu.name << std::endl;
+            std::cout << "[ScreenGuard] ║    Type: " << typeStr
                       << " | LowPower: " << (gpu.isLowPower ? "Yes" : "No")
                       << " | Removable: " << (gpu.isRemovable ? "Yes" : "No")
                       << std::endl;
         }
     }
 
-    std::cout << "[SkanCapture] ╚══════════════════════════════════════════╝" << std::endl;
+    std::cout << "[ScreenGuard] ╚══════════════════════════════════════════╝" << std::endl;
 }

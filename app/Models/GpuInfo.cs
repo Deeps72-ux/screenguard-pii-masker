@@ -1,4 +1,4 @@
-namespace SkanCapture.App.Models;
+namespace ScreenGuard.App.Models;
 
 /// <summary>
 /// Managed representation of GPU device information from the native layer.

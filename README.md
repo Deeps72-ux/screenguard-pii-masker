@@ -101,7 +101,7 @@ The system employs a dual-layer native/managed architecture:
   * `isRemovable == true` (Thunderbolt eGPU enclosure) &rarr; **External GPU (eGPU)**.
 
 ### 4. P/Invoke 64-Bit Struct Alignment (56 Bytes)
-Memory alignment between C++ `SkanCapture` and C# `SkanCaptureStruct` matches exactly:
+Memory alignment between C++ `ScreenGuardCapture` and C# `ScreenGuardCaptureStruct` matches exactly:
 ```
 Offset 0x00: Width       (4 bytes)
 Offset 0x04: Height      (4 bytes)

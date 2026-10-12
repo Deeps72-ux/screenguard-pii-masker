@@ -2,13 +2,13 @@
  * NativeInterop.cs
  * P/Invoke bindings for the C++ native screen capture library (libscreencapture.dylib).
  *
- * Struct layouts must exactly match the C structs in skan_api.h, including
+ * Struct layouts must exactly match the C structs in screenguard_api.h, including
  * padding/alignment for pointer and double fields on 64-bit platforms.
  */
 
 using System.Runtime.InteropServices;
 
-namespace SkanCapture.App.Interop;
+namespace ScreenGuard.App.Interop;
 
 /// <summary>
 /// P/Invoke declarations for the native C++ screen capture library.
@@ -27,18 +27,18 @@ public static class NativeInterop
 
     /// <summary>
     /// Callback invoked by native code on each mouse click capture.
-    /// The IntPtr points to a SkanCapture struct allocated on the native heap.
-    /// The managed side MUST call SkanFreeCapture() when done.
+    /// The IntPtr points to a ScreenGuardCapture struct allocated on the native heap.
+    /// The managed side MUST call ScreenGuardFreeCapture() when done.
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void SkanCaptureCallback(IntPtr capturePtr);
+    public delegate void ScreenGuardCaptureCallback(IntPtr capturePtr);
 
     /* ─────────────────────────────────────────────────────────────────── */
     /*  Structures                                                         */
     /* ─────────────────────────────────────────────────────────────────── */
 
     /// <summary>
-    /// Matches the C struct SkanCapture in skan_api.h.
+    /// Matches the C struct ScreenGuardCapture in screenguard_api.h.
     /// Layout on 64-bit:
     ///   Offset  0: Width       (4 bytes)
     ///   Offset  4: Height      (4 bytes)
@@ -53,7 +53,7 @@ public static class NativeInterop
     ///   Total: 56 bytes
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct SkanCaptureStruct
+    public struct ScreenGuardCaptureStruct
     {
         public int    Width;
         public int    Height;
@@ -66,10 +66,10 @@ public static class NativeInterop
     }
 
     /// <summary>
-    /// Matches the C struct SkanGpuInfo in skan_api.h.
+    /// Matches the C struct ScreenGuardGpuInfo in screenguard_api.h.
     /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-    public struct SkanGpuInfoStruct
+    public struct ScreenGuardGpuInfoStruct
     {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string Name;
@@ -85,37 +85,37 @@ public static class NativeInterop
     /// Initialize the native capture system.
     /// Returns 0 on success, negative on failure.
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int SkanInit(SkanCaptureCallback callback);
+    [DllImport(LibName, EntryPoint = "ScreenGuardInit", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int ScreenGuardInit(ScreenGuardCaptureCallback callback);
 
     /// <summary>
     /// Shut down the capture system and release resources.
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void SkanShutdown();
+    [DllImport(LibName, EntryPoint = "ScreenGuardShutdown", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void ScreenGuardShutdown();
 
     /// <summary>
     /// Get the number of detected GPU devices.
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int SkanGetGpuCount();
+    [DllImport(LibName, EntryPoint = "ScreenGuardGetGpuCount", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int ScreenGuardGetGpuCount();
 
     /// <summary>
     /// Get info about a specific GPU device.
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int SkanGetGpuInfo(int index, out SkanGpuInfoStruct info);
+    [DllImport(LibName, EntryPoint = "ScreenGuardGetGpuInfo", CallingConvention = CallingConvention.Cdecl)]
+    public static extern int ScreenGuardGetGpuInfo(int index, out ScreenGuardGpuInfoStruct info);
 
     /// <summary>
     /// Perform an immediate screen capture (for testing).
-    /// Caller must free with SkanFreeCapture().
+    /// Caller must free with ScreenGuardFreeCapture().
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr SkanCaptureNow();
+    [DllImport(LibName, EntryPoint = "ScreenGuardCaptureNow", CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr ScreenGuardCaptureNow();
 
     /// <summary>
-    /// Free a SkanCapture struct and its pixel buffer.
+    /// Free a ScreenGuardCapture struct and its pixel buffer.
     /// </summary>
-    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void SkanFreeCapture(IntPtr capturePtr);
+    [DllImport(LibName, EntryPoint = "ScreenGuardFreeCapture", CallingConvention = CallingConvention.Cdecl)]
+    public static extern void ScreenGuardFreeCapture(IntPtr capturePtr);
 }

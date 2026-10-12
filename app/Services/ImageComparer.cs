@@ -16,9 +16,9 @@
 
 using System.Text.Json;
 using SkiaSharp;
-using SkanCapture.App.Models;
+using ScreenGuard.App.Models;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Compares original and masked captures, generating visual diffs and audit reports.

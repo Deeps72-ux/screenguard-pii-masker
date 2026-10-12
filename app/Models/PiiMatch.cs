@@ -1,4 +1,4 @@
-namespace SkanCapture.App.Models;
+namespace ScreenGuard.App.Models;
 
 /// <summary>
 /// Represents a detected PII match with its type, original text, and screen coordinates.

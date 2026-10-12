@@ -58,7 +58,7 @@ if [ -f "$DYLIB_PATH" ]; then
     # Show exported symbols
     echo ""
     echo "   Exported API symbols:"
-    nm -gU "$APP_DIR/libscreencapture.dylib" 2>/dev/null | grep "Skan" | sed 's/^/       /' || true
+    nm -gU "$APP_DIR/libscreencapture.dylib" 2>/dev/null | grep "ScreenGuard" | sed 's/^/       /' || true
 else
     echo "       ✗ Build failed: libscreencapture.dylib not found at $DYLIB_PATH"
     exit 1

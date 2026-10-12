@@ -10,9 +10,9 @@
  */
 
 using SkiaSharp;
-using SkanCapture.App.Models;
+using ScreenGuard.App.Models;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Applies visual redaction masks over detected PII regions in screenshots.

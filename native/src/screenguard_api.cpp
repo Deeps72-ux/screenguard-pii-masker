@@ -1,6 +1,6 @@
 /**
- * @file skan_api.cpp
- * @brief Main Skan-AI native API implementation.
+ * @file screenguard_api.cpp
+ * @brief Main ScreenGuard native API implementation.
  *
  * Wires together all native modules (MouseMonitor, InputClassifier,
  * ScreenCapture, GpuDetector) and exposes the unified C API for the
@@ -10,11 +10,11 @@
  *   1. CGEventTap fires → MouseMonitor callback
  *   2. Query InputClassifier for the most recent device type
  *   3. ScreenCapture grabs the full screen as raw BGRA
- *   4. Build a SkanCapture struct and invoke the C# callback
- *   5. C# processes (OCR, PII mask, save) then calls SkanFreeCapture
+ *   4. Build a ScreenGuardCapture struct and invoke the C# callback
+ *   5. C# processes (OCR, PII mask, save) then calls ScreenGuardFreeCapture
  */
 
-#include "skan_api.h"
+#include "screenguard_api.h"
 #include "mouse_monitor.h"
 #include "input_classifier.h"
 #include "screen_capture.h"
@@ -30,11 +30,11 @@
 /*  Global State                                                               */
 /* ──────────────────────────────────────────────────────────────────────────── */
 
-static MouseMonitor*         g_mouseMonitor    = nullptr;
-static InputClassifier*      g_inputClassifier = nullptr;
-static SkanCaptureCallback   g_callback        = nullptr;
-static std::vector<GpuDeviceInfo> g_gpus;
-static std::mutex            g_initMutex;
+static MouseMonitor*                g_mouseMonitor    = nullptr;
+static InputClassifier*             g_inputClassifier = nullptr;
+static ScreenGuardCaptureCallback   g_callback        = nullptr;
+static std::vector<GpuDeviceInfo>   g_gpus;
+static std::mutex                   g_initMutex;
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 /*  API Implementation                                                         */
@@ -42,11 +42,11 @@ static std::mutex            g_initMutex;
 
 extern "C" {
 
-int SkanInit(SkanCaptureCallback callback) {
+int ScreenGuardInit(ScreenGuardCaptureCallback callback) {
     std::lock_guard<std::mutex> lock(g_initMutex);
 
     if (g_mouseMonitor) {
-        std::cerr << "[ScreenGuard] Already initialized. Call SkanShutdown() first." << std::endl;
+        std::cerr << "[ScreenGuard] Already initialized. Call ScreenGuardShutdown() first." << std::endl;
         return -1;
     }
 
@@ -116,10 +116,10 @@ int SkanInit(SkanCaptureCallback callback) {
             return;
         }
 
-        // Build the SkanCapture struct to pass to C#
-        SkanCapture* capture = (SkanCapture*)malloc(sizeof(SkanCapture));
+        // Build the ScreenGuardCapture struct to pass to C#
+        ScreenGuardCapture* capture = (ScreenGuardCapture*)malloc(sizeof(ScreenGuardCapture));
         if (!capture) {
-            std::cerr << "[ScreenGuard]   Memory allocation failed for SkanCapture." << std::endl;
+            std::cerr << "[ScreenGuard]   Memory allocation failed for ScreenGuardCapture." << std::endl;
             ScreenCapture::freeCapture(image);
             return;
         }
@@ -144,7 +144,7 @@ int SkanInit(SkanCaptureCallback callback) {
             g_callback(capture);
         } else {
             // No callback registered — free immediately
-            SkanFreeCapture(capture);
+            ScreenGuardFreeCapture(capture);
         }
     });
 
@@ -167,7 +167,7 @@ int SkanInit(SkanCaptureCallback callback) {
     return 0;
 }
 
-void SkanShutdown() {
+void ScreenGuardShutdown() {
     std::lock_guard<std::mutex> lock(g_initMutex);
 
     if (g_mouseMonitor) {
@@ -188,11 +188,11 @@ void SkanShutdown() {
     std::cout << "[ScreenGuard] Shutdown complete." << std::endl;
 }
 
-int SkanGetGpuCount() {
+int ScreenGuardGetGpuCount() {
     return static_cast<int>(g_gpus.size());
 }
 
-int SkanGetGpuInfo(int index, SkanGpuInfo* out) {
+int ScreenGuardGetGpuInfo(int index, ScreenGuardGpuInfo* out) {
     if (index < 0 || index >= static_cast<int>(g_gpus.size()) || !out) {
         return -1;
     }
@@ -205,7 +205,7 @@ int SkanGetGpuInfo(int index, SkanGpuInfo* out) {
     return 0;
 }
 
-SkanCapture* SkanCaptureNow() {
+ScreenGuardCapture* ScreenGuardCaptureNow() {
     CapturedImage* image = ScreenCapture::captureFullScreen();
     if (!image) return nullptr;
 
@@ -218,7 +218,7 @@ SkanCapture* SkanCaptureNow() {
     auto epochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()).count();
 
-    SkanCapture* capture = (SkanCapture*)malloc(sizeof(SkanCapture));
+    ScreenGuardCapture* capture = (ScreenGuardCapture*)malloc(sizeof(ScreenGuardCapture));
     if (!capture) {
         ScreenCapture::freeCapture(image);
         return nullptr;
@@ -239,7 +239,7 @@ SkanCapture* SkanCaptureNow() {
     return capture;
 }
 
-void SkanFreeCapture(SkanCapture* capture) {
+void ScreenGuardFreeCapture(ScreenGuardCapture* capture) {
     if (!capture) return;
 
     if (capture->pixelData) {

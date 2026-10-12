@@ -34,7 +34,7 @@ static CGImageRef CreateScreenCaptureKitImage() {
             NSError * _Nullable error) {
 
         if (error || !shareableContent || shareableContent.displays.count == 0) {
-            NSLog(@"[SkanCapture] Error getting shareable content: %@",
+            NSLog(@"[ScreenGuard] Error getting shareable content: %@",
                   error ? error.localizedDescription : @"No displays found");
             dispatch_semaphore_signal(semaphore);
             return;
@@ -60,7 +60,7 @@ static CGImageRef CreateScreenCaptureKitImage() {
                                   completionHandler:^(CGImageRef _Nullable cgImage,
                                                       NSError * _Nullable captureError) {
             if (captureError) {
-                NSLog(@"[SkanCapture] Capture error: %@", captureError.localizedDescription);
+                NSLog(@"[ScreenGuard] Capture error: %@", captureError.localizedDescription);
             } else if (cgImage) {
                 CGImageRetain(cgImage);
                 capturedImage = cgImage;
@@ -72,7 +72,7 @@ static CGImageRef CreateScreenCaptureKitImage() {
     // Wait for the async capture to complete (timeout: 5 seconds)
     dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC);
     if (dispatch_semaphore_wait(semaphore, timeout) != 0) {
-        NSLog(@"[SkanCapture] Screenshot capture timed out.");
+        NSLog(@"[ScreenGuard] Screenshot capture timed out.");
         return nullptr;
     }
 
@@ -84,7 +84,7 @@ CapturedImage* ScreenCapture::captureFullScreen() {
         CGImageRef cgImage = CreateScreenCaptureKitImage();
 
         if (!cgImage) {
-            std::cerr << "[SkanCapture] ERROR: Screen capture failed.\n"
+            std::cerr << "[ScreenGuard] ERROR: Screen capture failed.\n"
                       << "             Please grant Screen Recording permission:\n"
                       << "             System Settings → Privacy & Security → Screen Recording"
                       << std::endl;
@@ -102,14 +102,14 @@ CapturedImage* ScreenCapture::captureFullScreen() {
         CGDataProviderRef provider = CGImageGetDataProvider(cgImage);
         if (!provider) {
             CGImageRelease(cgImage);
-            std::cerr << "[SkanCapture] ERROR: Failed to get data provider from CGImage." << std::endl;
+            std::cerr << "[ScreenGuard] ERROR: Failed to get data provider from CGImage." << std::endl;
             return nullptr;
         }
 
         CFDataRef dataRef = CGDataProviderCopyData(provider);
         if (!dataRef) {
             CGImageRelease(cgImage);
-            std::cerr << "[SkanCapture] ERROR: Failed to copy pixel data." << std::endl;
+            std::cerr << "[ScreenGuard] ERROR: Failed to copy pixel data." << std::endl;
             return nullptr;
         }
 
@@ -121,7 +121,7 @@ CapturedImage* ScreenCapture::captureFullScreen() {
         if (!rawData) {
             CFRelease(dataRef);
             CGImageRelease(cgImage);
-            std::cerr << "[SkanCapture] ERROR: Failed to allocate " << dataSize
+            std::cerr << "[ScreenGuard] ERROR: Failed to allocate " << dataSize
                       << " bytes for pixel buffer." << std::endl;
             return nullptr;
         }
@@ -140,7 +140,7 @@ CapturedImage* ScreenCapture::captureFullScreen() {
         result->data = rawData;
         result->dataSize = dataSize;
 
-        std::cout << "[SkanCapture] Screen captured: " << width << "x" << height
+        std::cout << "[ScreenGuard] Screen captured: " << width << "x" << height
                   << " (" << bitsPerPixel << "bpp, " << bytesPerRow << " bytes/row, "
                   << (dataSize / 1024 / 1024) << " MB)" << std::endl;
 

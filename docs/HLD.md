@@ -46,7 +46,7 @@ graph TB
         IC["InputClassifier<br/>(Device Subtype + HID Usage)"]
         SC["ScreenCapture Engine<br/>(Raw BGRA Frame Buffer)"]
         GD["GpuDetector<br/>(Metal Device Enumeration)"]
-        API["C Export API (skan_api)<br/>(Callback Dispatcher)"]
+        API["C Export API (screenguard_api)<br/>(Callback Dispatcher)"]
     end
 
     subgraph "C# .NET 8 Managed Layer (ScreenGuard.App)"
@@ -69,7 +69,7 @@ graph TB
     SC --> API
     GD --> API
 
-    API -->|"P/Invoke Callback (SkanCapture*)"| PINVOKE
+    API -->|"P/Invoke Callback (ScreenGuardCapture*)"| PINVOKE
     PINVOKE --> IMG_CONV
     IMG_CONV --> OCR
     OCR --> PII_DET
@@ -99,9 +99,9 @@ graph TB
 * Inter-process communication overhead is eliminated by loading `libscreencapture.dylib` in-process via `.NET 8 P/Invoke`.
 * Execution is driven by an unmanaged C function pointer callback:
   ```c
-  typedef void (*SkanCaptureCallback)(SkanCapture* capture);
+  typedef void (*ScreenGuardCaptureCallback)(ScreenGuardCapture* capture);
   ```
-* Memory ownership is strictly decoupled: C++ allocates the capture container and raw pixel buffer, C# consumes the buffer into SkiaSharp, and C# invokes `SkanFreeCapture(IntPtr)` in a `finally` block to guarantee 0 native memory leaks.
+* Memory ownership is strictly decoupled: C++ allocates the capture container and raw pixel buffer, C# consumes the buffer into SkiaSharp, and C# invokes `ScreenGuardFreeCapture(IntPtr)` in a `finally` block to guarantee 0 native memory leaks.
 
 ---
 
@@ -127,7 +127,7 @@ sequenceDiagram
     Classifier-->>Native: Return "Trackpad" or "External Mouse"
     Native->>Capture: Trigger Display Snapshot
     Capture-->>Native: Raw BGRA Buffer + Stride
-    Native->>Interop: Invoke SkanCaptureCallback(capturePtr)
+    Native->>Interop: Invoke ScreenGuardCaptureCallback(capturePtr)
     Interop->>OCR: Stream PNG Bytes via Stdin
     OCR-->>Interop: Word Tokens + Bounding Boxes (X, Y, W, H)
     Interop->>PII: Scan Tokens with Regex + Luhn Check
@@ -135,7 +135,7 @@ sequenceDiagram
     Interop->>Masker: Apply Redaction Overlays & Badges
     Masker-->>Interop: Redacted SKBitmap
     Interop->>Disk: Save Original, Masked, Composite & JSON Report
-    Interop->>Native: Call SkanFreeCapture(capturePtr)
+    Interop->>Native: Call ScreenGuardFreeCapture(capturePtr)
 ```
 
 ---
@@ -173,7 +173,7 @@ ScreenGuard interfaces directly with Apple's Metal framework (`MTLCopyAllDevices
 | **Data in Transit** | In-process native memory marshaling. No inter-process sockets, no HTTP endpoints. |
 | **Data at Rest** | Original and masked screenshots saved to configurable local directories with restricted POSIX permissions (`0600`). |
 | **PII in Logs** | Logging utilities utilize `MaskedPreview` (e.g. `12*******89`), ensuring raw unredacted PII is **never written to stdout/stderr**. |
-| **Memory Cleanup** | `SkanFreeCapture()` wipes and frees native heap memory immediately after managed bitmap creation. |
+| **Memory Cleanup** | `ScreenGuardFreeCapture()` wipes and frees native heap memory immediately after managed bitmap creation. |
 
 ---
 

@@ -1,4 +1,4 @@
-namespace SkanCapture.App.Models;
+namespace ScreenGuard.App.Models;
 
 /// <summary>
 /// Represents the result of a screen capture event.

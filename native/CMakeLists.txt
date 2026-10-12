@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(SkanScreenCapture LANGUAGES CXX OBJCXX)
+project(ScreenGuardCapture LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
 # Source files
 set(SOURCES
-    src/skan_api.cpp
+    src/screenguard_api.cpp
     src/mouse_monitor.cpp
     src/input_classifier.cpp
     src/screen_capture.mm
@@ -46,4 +46,4 @@ set_target_properties(screencapture PROPERTIES
 
 # Install target (optional)
 install(TARGETS screencapture LIBRARY DESTINATION lib)
-install(FILES include/skan_api.h DESTINATION include)
+install(FILES include/screenguard_api.h DESTINATION include)

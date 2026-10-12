@@ -36,7 +36,7 @@ CGEventRef MouseMonitor::eventCallback(CGEventTapProxy proxy, CGEventType type,
 
     // Handle event tap being disabled by the system (timeout or user input)
     if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
-        std::cerr << "[SkanCapture] Event tap was disabled by macOS. Re-enabling..." << std::endl;
+        std::cerr << "[ScreenGuard] Event tap was disabled by macOS. Re-enabling..." << std::endl;
         if (self->m_eventTap) {
             CGEventTapEnable(self->m_eventTap, true);
         }
@@ -70,7 +70,7 @@ CGEventRef MouseMonitor::eventCallback(CGEventTapProxy proxy, CGEventType type,
 
 bool MouseMonitor::start(MouseClickCallback callback) {
     if (m_running.load()) {
-        std::cerr << "[SkanCapture] Mouse monitor already running." << std::endl;
+        std::cerr << "[ScreenGuard] Mouse monitor already running." << std::endl;
         return false;
     }
 
@@ -110,7 +110,7 @@ void MouseMonitor::runLoopThread() {
     );
 
     if (!m_eventTap) {
-        std::cerr << "[SkanCapture] ERROR: Failed to create event tap.\n"
+        std::cerr << "[ScreenGuard] ERROR: Failed to create event tap.\n"
                   << "             Please grant Input Monitoring permission:\n"
                   << "             System Settings → Privacy & Security → Input Monitoring"
                   << std::endl;
@@ -121,7 +121,7 @@ void MouseMonitor::runLoopThread() {
     // Create a CFRunLoop source from the event tap
     m_runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, m_eventTap, 0);
     if (!m_runLoopSource) {
-        std::cerr << "[SkanCapture] ERROR: Failed to create CFRunLoopSource." << std::endl;
+        std::cerr << "[ScreenGuard] ERROR: Failed to create CFRunLoopSource." << std::endl;
         CFRelease(m_eventTap);
         m_eventTap = nullptr;
         m_running.store(false);
@@ -133,8 +133,8 @@ void MouseMonitor::runLoopThread() {
     CFRunLoopAddSource(m_runLoop, m_runLoopSource, kCFRunLoopCommonModes);
     CGEventTapEnable(m_eventTap, true);
 
-    std::cout << "[SkanCapture] Mouse event monitoring started successfully." << std::endl;
-    std::cout << "[SkanCapture] Listening for mouse clicks (left + right button)." << std::endl;
+    std::cout << "[ScreenGuard] Mouse event monitoring started successfully." << std::endl;
+    std::cout << "[ScreenGuard] Listening for mouse clicks (left + right button)." << std::endl;
 
     // Run the loop in intervals so we can check the running flag
     while (m_running.load()) {
@@ -165,7 +165,7 @@ void MouseMonitor::stop() {
         m_thread.join();
     }
 
-    std::cout << "[SkanCapture] Mouse event monitoring stopped." << std::endl;
+    std::cout << "[ScreenGuard] Mouse event monitoring stopped." << std::endl;
 }
 
 bool MouseMonitor::isRunning() const {

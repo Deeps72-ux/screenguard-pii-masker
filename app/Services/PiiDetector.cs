@@ -19,9 +19,9 @@
  */
 
 using System.Text.RegularExpressions;
-using SkanCapture.App.Models;
+using ScreenGuard.App.Models;
 
-namespace SkanCapture.App.Services;
+namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Detects PII patterns in OCR-extracted text using regular expressions and heuristics.
