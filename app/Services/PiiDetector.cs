@@ -79,7 +79,42 @@ public class PiiDetector
         // Employer Identification Number (EIN): XX-XXXXXXX
         new("TaxID", new Regex(
             @"\b[1-9]\d-\d{7}\b",
-            RegexOptions.Compiled))
+            RegexOptions.Compiled)),
+
+        // Personal Name & Recipient Identifiers (e.g., Deliver to DEEPAN, Hello, DEEPAN, Customer: John)
+        new("Name", new Regex(
+            @"\b(?:Deliver\s+to|Hello,?|Hi,?|User(?:name)?|Name|Customer|Patient|Employee|Logged\s+in\s+as|Account\s+(?:holder|name|owner)?|Recipient|Owner|Attn|Attention)[\s:]+[A-Za-z0-9_\.\-]+\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+
+        // Formal titles with name (e.g. Dr. Smith, Mr. Deepan)
+        new("Name", new Regex(
+            @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b",
+            RegexOptions.Compiled)),
+
+        // Handles / Usernames (e.g. @username)
+        new("Username", new Regex(
+            @"@[a-zA-Z0-9_]{3,20}\b",
+            RegexOptions.Compiled)),
+
+        // Physical Addresses & City + Postal / PIN / ZIP code (e.g. Chennai 600032, Seattle 98101)
+        new("Address", new Regex(
+            @"\b[A-Za-z]{3,25}\s+\d{5,6}\b",
+            RegexOptions.Compiled)),
+
+        // Standard Street Addresses (e.g., 123 Main Street, 45 Park Ave)
+        new("Address", new Regex(
+            @"\b\d{1,5}\s+(?:[A-Za-z0-9#\.\-]+\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Highway|Hwy|P\.?O\.?\s*Box)\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+
+        // Labeled Address and Postal/PIN codes
+        new("Address", new Regex(
+            @"\b(?:PIN|ZIP|Postal|Pincode)(?:\s*Code)?[\s:]*\d{5,6}\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+
+        // Credentials / Passwords
+        new("Credentials", new Regex(
+            @"\b(?:Password|Passcode|Secret|API\s*Key)[\s:]*\S+\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase))
     ];
 
     /// <summary>
@@ -120,10 +155,10 @@ public class PiiDetector
             }
         }
 
-        // 2. Multi-word sliding window (lengths 2 to 4)
+        // 2. Multi-word sliding window (lengths 2 to 6)
         for (int i = 0; i < ocrResults.Count; i++)
         {
-            int maxLen = Math.Min(4, ocrResults.Count - i);
+            int maxLen = Math.Min(6, ocrResults.Count - i);
             for (int len = 2; len <= maxLen; len++)
             {
                 var group = ocrResults.GetRange(i, len);

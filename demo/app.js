@@ -145,7 +145,11 @@ const PII_RULES = [
   { type: 'CREDIT CARD', regex: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{1,4}\b/g },
   { type: 'IP ADDRESS', regex: /\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g },
   { type: 'DOB', regex: /\b(?:0[1-9]|1[0-2])[/\-.](?:0[1-9]|[12]\d|3[01])[/\-.](?:19|20)\d{2}\b/g },
-  { type: 'PASSPORT', regex: /\b[A-Z][0-9]{8}\b/g }
+  { type: 'PASSPORT', regex: /\b[A-Z][0-9]{8}\b/g },
+  { type: 'NAME', regex: /\b(?:Deliver\s+to|Hello,?|Hi,?|User(?:name)?|Name|Customer|Patient|Employee|Logged\s+in\s+as|Account\s+(?:holder|name|owner)?|Recipient|Owner|Attn|Attention)[\s:]+[A-Za-z0-9_\.\-]+\b/gi },
+  { type: 'ADDRESS', regex: /\b[A-Za-z]{3,25}\s+\d{5,6}\b/g },
+  { type: 'ADDRESS', regex: /\b\d{1,5}\s+(?:[A-Za-z0-9#\.\-]+\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Highway|Hwy|P\.?O\.?\s*Box)\b/gi },
+  { type: 'USERNAME', regex: /@[a-zA-Z0-9_]{3,20}\b/g }
 ];
 
 function initPiiSandbox() {

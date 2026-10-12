@@ -51,6 +51,7 @@ class Program
         string outputDir = Path.Combine(Directory.GetCurrentDirectory(), "output");
         bool testMode = false;
         bool benchmarkMode = false;
+        string? scanFile = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -67,6 +68,10 @@ class Program
             else if (arg is "--benchmark" or "--sample")
             {
                 benchmarkMode = true;
+            }
+            else if (arg is "--scan" or "-s" && i + 1 < args.Length)
+            {
+                scanFile = args[++i];
             }
             else if (arg is "--output" or "-o" && i + 1 < args.Length)
             {
@@ -86,6 +91,12 @@ class Program
         Console.WriteLine();
 
         // ── Mode Execution ──────────────────────────────────────────────
+        if (!string.IsNullOrEmpty(scanFile))
+        {
+            RunScanFile(scanFile);
+            return;
+        }
+
         if (benchmarkMode)
         {
             RunSyntheticBenchmark();
@@ -323,6 +334,35 @@ class Program
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine("└───────────────────────────────────────────────────────");
         Console.ResetColor();
+    }
+
+    /// <summary>
+    /// Processes a static image file directly through the OCR and PII redaction pipeline.
+    /// </summary>
+    private static void RunScanFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[✗] Image file not found: {path}");
+            Console.ResetColor();
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"[*] Processing image through OCR and PII redaction engine: {Path.GetFileName(path)}");
+        Console.ResetColor();
+
+        using var bitmap = SKBitmap.Decode(path);
+        if (bitmap == null)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[✗] Failed to decode image: {path}");
+            Console.ResetColor();
+            return;
+        }
+
+        ProcessCapture(bitmap, "ManualScan", 0, 0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 
     /// <summary>
