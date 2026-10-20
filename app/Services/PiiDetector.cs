@@ -44,11 +44,11 @@ public class PiiDetector
 
         // Phone numbers (US + international)
         new("Phone", new Regex(
-            @"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+            @"(?:\+\d{1,3}[ \-.]?)?(?:\([0-9]{3}\)|[0-9]{3})[ \-.]?[0-9]{3}[ \-.]?[0-9]{4}\b",
             RegexOptions.Compiled)),
 
         new("Phone", new Regex(
-            @"\b\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b",
+            @"\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b",
             RegexOptions.Compiled)),
 
         // Credit Cards (Visa, MasterCard, AmEx, Discover) with Luhn validation
@@ -81,14 +81,18 @@ public class PiiDetector
             @"\b[1-9]\d-\d{7}\b",
             RegexOptions.Compiled)),
 
-        // Personal Name & Recipient Identifiers (e.g., Deliver to DEEPAN, Hello, DEEPAN, Customer: John)
+        // Personal Name & Recipient Identifiers (e.g., Deliver to DEEPAN, Hello, DEEPAN, Customer: John, Employee Name: Alexander Hamilton)
         new("Name", new Regex(
-            @"\b(?:Deliver\s+to|Hello,?|Hi,?|User(?:name)?|Name|Customer|Patient|Employee|Logged\s+in\s+as|Account\s+(?:holder|name|owner)?|Recipient|Owner|Attn|Attention)[\s:]+[A-Za-z0-9_\.\-]+\b",
+            @"\b(?:(?:Employee|Patient|Customer|Client|User(?:name)?|Full)?\s*Name|Account\s+(?:Holder|Name|Owner)|Deliver\s+to|Logged\s+in\s+as|Attn|Attention|Recipient|Owner)[\s:]+(?:[A-Za-z][a-zA-Z'\-]*(?:\.[ \t]+|\.[ \t]*|[ \t]+)(?:[A-Z]\.?[ \t]+)?[A-Z][a-zA-Z'\-]*|[A-Za-z][a-zA-Z'\-]*)\b",
             RegexOptions.Compiled | RegexOptions.IgnoreCase)),
 
-        // Formal titles with name (e.g. Dr. Smith, Mr. Deepan)
         new("Name", new Regex(
-            @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b",
+            @"\b(?:Customer|Patient|Employee|User|Client|Recipient|Owner|Contact)[\s]*:[\s]*[A-Za-z][a-zA-Z'\-]*(?:[ \t]+[A-Za-z][a-zA-Z'\-]*|[ \t]+[A-Za-z]\.)*\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+
+        // Formal titles with name (e.g. Dr. Smith, Mr. Deepan, Dr. Robert J. Oppenheimer)
+        new("Name", new Regex(
+            @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.?)?(?:[ \t]+[A-Z][a-zA-Z'\-]+)*\b",
             RegexOptions.Compiled)),
 
         // Handles / Usernames (e.g. @username)

@@ -138,15 +138,24 @@ Terminal IP:      172.16.254.1`
 };
 
 const PII_RULES = [
-  { type: 'SSN', regex: /\b(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/g },
+  { type: 'SSN', regex: /\b(?!000|666)\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/g },
   { type: 'EMAIL', regex: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g },
-  { type: 'PHONE', regex: /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g },
-  { type: 'PHONE', regex: /\b\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g },
+  { type: 'PHONE', regex: /(?:\+\d{1,3}[ \-.]?)?(?:\([0-9]{3}\)|[0-9]{3})[ \-.]?[0-9]{3}[ \-.]?[0-9]{4}\b/g },
+  { type: 'PHONE', regex: /\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b/g },
   { type: 'CREDIT CARD', regex: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{1,4}\b/g },
   { type: 'IP ADDRESS', regex: /\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g },
   { type: 'DOB', regex: /\b(?:0[1-9]|1[0-2])[/\-.](?:0[1-9]|[12]\d|3[01])[/\-.](?:19|20)\d{2}\b/g },
   { type: 'PASSPORT', regex: /\b[A-Z][0-9]{8}\b/g },
-  { type: 'NAME', regex: /\b(?:Deliver\s+to|Hello,?|Hi,?|User(?:name)?|Name|Customer|Patient|Employee|Logged\s+in\s+as|Account\s+(?:holder|name|owner)?|Recipient|Owner|Attn|Attention)[\s:]+[A-Za-z0-9_\.\-]+\b/gi },
+  { type: 'TAX ID', regex: /\b[1-9]\d-\d{7}\b/g },
+  {
+    type: 'NAME',
+    regex: /\b((?:(?:Employee|Patient|Customer|Client|User(?:name)?|Full)?\s*Name|Account\s+(?:Holder|Name|Owner)|Deliver\s+to|Logged\s+in\s+as|Attn|Attention|Recipient|Owner)[: \t]+|(?:Customer|Patient|Employee|User|Client|Recipient|Owner|Contact)[ \t]*:[ \t]*|(?:Hello|Hi),?[ \t]+)([A-Z][a-zA-Z'\-]*(?:\.[ \t]+|\.[ \t]*|[ \t]+)(?:[A-Z]\.?[ \t]+)?[A-Z][a-zA-Z'\-]*|[A-Z][a-zA-Z'\-]*)\b/g,
+    replace: (match, label) => `${label}<span class="redacted-block">[REDACTED: NAME]</span>`
+  },
+  {
+    type: 'NAME',
+    regex: /\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)[ \t]+([A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.?)?(?:[ \t]+[A-Z][a-zA-Z'\-]+)*)\b/g
+  },
   { type: 'ADDRESS', regex: /\b[A-Za-z]{3,25}\s+\d{5,6}\b/g },
   { type: 'ADDRESS', regex: /\b\d{1,5}\s+(?:[A-Za-z0-9#\.\-]+\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Highway|Hwy|P\.?O\.?\s*Box)\b/gi },
   { type: 'USERNAME', regex: /@[a-zA-Z0-9_]{3,20}\b/g }
@@ -191,8 +200,11 @@ function initPiiSandbox() {
     let totalDetected = 0;
 
     PII_RULES.forEach(rule => {
-      redactedHtml = redactedHtml.replace(rule.regex, (match) => {
+      redactedHtml = redactedHtml.replace(rule.regex, (...args) => {
         totalDetected++;
+        if (typeof rule.replace === 'function') {
+          return rule.replace(...args);
+        }
         return `<span class="redacted-block">[REDACTED: ${rule.type}]</span>`;
       });
     });
