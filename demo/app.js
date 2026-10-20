@@ -156,6 +156,11 @@ const PII_RULES = [
     type: 'NAME',
     regex: /\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)[ \t]+([A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.?)?(?:[ \t]+[A-Z][a-zA-Z'\-]+)*)\b/g
   },
+  {
+    type: 'JOB TITLE',
+    regex: /\b((?:Job\s+Title|Title|Position|Role|Designation|Occupation)[: \t]+)([A-Za-z][a-zA-Z'\-]*(?:[ \t]+[A-Za-z][a-zA-Z'\-]*)*)\b/g,
+    replace: (match, label) => `${label}<span class="redacted-block">[REDACTED: JOB TITLE]</span>`
+  },
   { type: 'ADDRESS', regex: /\b[A-Za-z]{3,25}\s+\d{5,6}\b/g },
   { type: 'ADDRESS', regex: /\b\d{1,5}\s+(?:[A-Za-z0-9#\.\-]+\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Highway|Hwy|P\.?O\.?\s*Box)\b/gi },
   { type: 'USERNAME', regex: /@[a-zA-Z0-9_]{3,20}\b/g }

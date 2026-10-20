@@ -95,6 +95,11 @@ public class PiiDetector
             @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+[A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.?)?(?:[ \t]+[A-Z][a-zA-Z'\-]+)*\b",
             RegexOptions.Compiled)),
 
+        // Job Titles and Professional Designations (e.g., Job Title: Chief Financial Architect)
+        new("JobTitle", new Regex(
+            @"\b(?:Job\s+Title|Title|Position|Role|Designation|Occupation)[\s:]+[A-Za-z][a-zA-Z'\-]*(?:[ \t]+[A-Za-z][a-zA-Z'\-]*)*\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase)),
+
         // Handles / Usernames (e.g. @username)
         new("Username", new Regex(
             @"@[a-zA-Z0-9_]{3,20}\b",
