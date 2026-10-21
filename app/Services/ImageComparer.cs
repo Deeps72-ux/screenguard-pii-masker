@@ -143,6 +143,7 @@ public class ImageComparer : IImageComparer
             dimensions = new { width = result.Width, height = result.Height },
             redactionMode = result.RedactionMode,
             nameRecognition = result.NameRecognition,
+            visualDetectors = result.VisualDetectors,
             piiSummary = new
             {
                 totalDetected = piiMatches.Count,

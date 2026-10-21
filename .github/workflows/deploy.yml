@@ -3,6 +3,8 @@ name: CI & GitHub Pages Deployment
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -74,8 +76,11 @@ jobs:
           $report = Get-Content (Get-ChildItem "$env:RUNNER_TEMP/bench/reports/*.json")[0] | ConvertFrom-Json
           if ($report.redactionMode -ne "ocr") { throw "OCR did not run on Windows" }
           if ($report.nameRecognition -ne "ner") { throw "Name recognition model did not load on Windows" }
+          if (-not ($report.visualDetectors -contains "face")) { throw "Face masking model did not load on Windows" }
 
   deploy-pages:
+    # Pull requests only build and test; the site deploys from main
+    if: github.event_name != 'pull_request'
     needs: [build-and-test, build-and-test-windows]
     environment:
       name: github-pages

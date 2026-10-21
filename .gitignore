@@ -46,3 +46,4 @@ docs/07-name-recognition/
 docs/08-masking-and-output/
 docs/09-build-and-release/
 scripts/render_docs_diagrams.mjs
+docs/10-face-masking/

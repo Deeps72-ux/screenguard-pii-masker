@@ -31,6 +31,7 @@ using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
 using ScreenGuard.App.Platforms;
 using ScreenGuard.App.Services;
+using ScreenGuard.App.Services.Vision;
 
 namespace ScreenGuard.App;
 
@@ -40,6 +41,8 @@ class Program
     private static readonly ImageConverter _imageConverter = new();
     private static IPiiDetector _piiDetector = new PiiDetector();
     private static INameRecognizer? _nameRecognizer;
+    private static IReadOnlyList<IVisualPiiDetector> _visualDetectors = [];
+    private static CaptureProcessor _processor = null!;
     private static readonly IPiiMasker _piiMasker = new PiiMasker();
     private static readonly IImageComparer _imageComparer = new ImageComparer();
     private static IOcrEngine? _ocrEngine;
@@ -57,6 +60,7 @@ class Program
     private static int _captureCount = 0;
     private static int _droppedFrames = 0;
     private static bool _saveOriginals = true;
+    private static bool _maskFaces = true;
     private static readonly List<CaptureResult> _captureHistory = new();
     private static readonly ManualResetEventSlim _exitEvent = new(false);
     private static readonly BlockingCollection<CapturedFrame> _frameQueue = new(MaxQueuedFrames);
@@ -91,6 +95,10 @@ class Program
             else if (arg is "--no-original")
             {
                 _saveOriginals = false;
+            }
+            else if (arg is "--no-faces")
+            {
+                _maskFaces = false;
             }
             else if (arg is "--scan" or "-s")
             {
@@ -131,6 +139,10 @@ class Program
         // ── Initialize OCR and name recognition ─────────────────────────
         InitializeOcr();
         InitializeNameRecognizer();
+        InitializeVisualDetectors();
+        _processor = new CaptureProcessor(
+            _ocrEngine, _piiDetector, _visualDetectors, _piiMasker, _imageComparer, _diskWriter,
+            new CaptureProcessorOptions(_saveOriginals, _nameRecognizer != null ? "ner" : "labels-only"));
         Console.WriteLine();
 
         // ── Mode Execution ──────────────────────────────────────────────
@@ -160,8 +172,7 @@ class Program
         if (testMode)
         {
             bool captured = RunSingleCaptureTest();
-            _ocrEngine?.Dispose();
-        _nameRecognizer?.Dispose();
+            DisposeServices();
             PrintSessionSummary();
             return captured ? 0 : 1;
         }
@@ -244,8 +255,7 @@ class Program
             Console.WriteLine($"[*] Finishing {_frameQueue.Count} queued capture(s)...");
         }
         processingThreads.ForEach(t => t.Join());
-        _ocrEngine?.Dispose();
-        _nameRecognizer?.Dispose();
+        DisposeServices();
 
         PrintSessionSummary();
         return 0;
@@ -389,7 +399,7 @@ class Program
     }
 
     /// <summary>
-    /// Processes a captured bitmap through OCR, PII detection, masking, comparison, and disk saving.
+    /// Runs one frame through the capture pipeline and records it in the session history.
     /// </summary>
     private static void ProcessCapture(
         SKBitmap bitmap,
@@ -399,127 +409,11 @@ class Program
         long timestampMs,
         CaptureLog log)
     {
-        string timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestampMs)
-            .ToLocalTime().ToString("yyyyMMdd_HHmmss_fff");
-        string captureId = $"capture_{timestamp}";
-
-        // 1. Save original screenshot
-        string originalPath = "";
-        if (_saveOriginals)
-        {
-            originalPath = _diskWriter.SaveOriginal(bitmap, timestamp);
-            log.Color(ConsoleColor.Green);
-            log.Line($"│  [✓] Original saved:   {Path.GetFileName(originalPath)}");
-            log.Reset();
-        }
-
-        // 2. OCR and PII Detection
-        var piiMatches = new List<PiiMatch>();
-        bool ocrSucceeded = false;
-        if (_ocrEngine != null)
-        {
-            try
-            {
-                var ocrResults = _ocrEngine.ExtractTextWithBounds(bitmap);
-                log.Color(ConsoleColor.DarkGray);
-                log.Line($"│  [~] OCR extracted {ocrResults.Count} word tokens. Scanning for PII...");
-                log.Reset();
-
-                piiMatches = _piiDetector.DetectPii(ocrResults);
-                ocrSucceeded = true;
-
-                if (piiMatches.Count > 0)
-                {
-                    log.Color(ConsoleColor.Magenta);
-                    log.Line($"│  [!] Detected {piiMatches.Count} PII entity(s) for redaction:");
-                    foreach (var match in piiMatches)
-                    {
-                        log.Line($"│      • {match}");
-                    }
-                    log.Reset();
-                }
-                else
-                {
-                    log.Color(ConsoleColor.DarkGray);
-                    log.Line("│  [i] OCR completed: 0 PII entities detected.");
-                    log.Reset();
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Color(ConsoleColor.Yellow);
-                log.Line($"│  [!] OCR / PII detection failed: {ex.Message}");
-                log.Reset();
-            }
-        }
-
-        // Fail closed: without a successful OCR pass we cannot know where PII is,
-        // so the masked output redacts the entire frame instead of passing it through.
-        if (!ocrSucceeded)
-        {
-            piiMatches =
-            [
-                new PiiMatch
-                {
-                    Type = "FullFrame",
-                    OriginalText = "",
-                    X = 0,
-                    Y = 0,
-                    Width = bitmap.Width,
-                    Height = bitmap.Height
-                }
-            ];
-            log.Color(ConsoleColor.Yellow);
-            log.Line("│  [!] OCR unavailable — entire frame redacted (fail closed).");
-            log.Reset();
-        }
-
-        // 3. Apply Visual Masking
-        using var maskedBitmap = _piiMasker.ApplyMask(bitmap, piiMatches);
-        string maskedPath = _diskWriter.SaveMasked(maskedBitmap, timestamp);
-        log.Color(ConsoleColor.Green);
-        log.Line($"│  [✓] Masked saved:     {Path.GetFileName(maskedPath)}");
-        log.Reset();
-
-        // 4. Create Side-by-Side Comparison Composite
-        using var comparisonBitmap = _imageComparer.CreateSideBySideComparison(
-            bitmap, maskedBitmap, piiMatches, captureId, inputSource);
-        string comparisonPath = _diskWriter.SaveComparison(comparisonBitmap, timestamp);
-        log.Color(ConsoleColor.Cyan);
-        log.Line($"│  [✓] Comparison saved: {Path.GetFileName(comparisonPath)}");
-        log.Reset();
-
-        // 5. Generate Audit Report
-        var resultModel = new CaptureResult
-        {
-            CaptureId = captureId,
-            Width = bitmap.Width,
-            Height = bitmap.Height,
-            InputSource = inputSource,
-            ClickX = clickX,
-            ClickY = clickY,
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestampMs),
-            OriginalImagePath = originalPath,
-            MaskedImagePath = maskedPath,
-            PiiCount = ocrSucceeded ? piiMatches.Count : 0,
-            RedactionMode = ocrSucceeded ? "ocr" : "full-frame",
-            NameRecognition = _nameRecognizer != null ? "ner" : "labels-only"
-        };
-
-        string jsonReport = _imageComparer.GenerateJsonReport(resultModel, piiMatches, comparisonPath);
-        string reportPath = _diskWriter.SaveReport(jsonReport, timestamp);
-        log.Color(ConsoleColor.DarkCyan);
-        log.Line($"│  [✓] Report saved:     {Path.GetFileName(reportPath)}");
-        log.Reset();
-
+        var result = _processor.Process(bitmap, inputSource, clickX, clickY, timestampMs, log);
         lock (_captureHistory)
         {
-            _captureHistory.Add(resultModel);
+            _captureHistory.Add(result);
         }
-
-        log.Color(ConsoleColor.DarkGray);
-        log.Line("└───────────────────────────────────────────────────────");
-        log.Reset();
     }
 
     /// <summary>
@@ -687,16 +581,7 @@ class Program
     /// </summary>
     private static void InitializeNameRecognizer()
     {
-        string[] candidateDirs =
-        [
-            Path.Combine(AppContext.BaseDirectory, "models", "ner"),
-            Path.Combine(AppContext.BaseDirectory, "..", "Resources", "models", "ner"),
-            Path.Combine(Directory.GetCurrentDirectory(), "models", "ner"),
-            Path.Combine(Directory.GetCurrentDirectory(), "..", "models", "ner")
-        ];
-
-        string? modelDir = candidateDirs.FirstOrDefault(dir =>
-            File.Exists(Path.Combine(dir, "model.onnx")) && File.Exists(Path.Combine(dir, "vocab.txt")));
+        string? modelDir = ModelLocator.Find("ner", "model.onnx", "vocab.txt");
 
         if (modelDir == null)
         {
@@ -722,6 +607,35 @@ class Program
             Console.WriteLine("    Only labelled or titled names will be masked.");
             Console.ResetColor();
         }
+    }
+
+    /// <summary>
+    /// Loads the pixel-based detectors (faces) that are enabled and whose models are present.
+    /// </summary>
+    private static void InitializeVisualDetectors()
+    {
+        _visualDetectors = VisualDetectorFactory.CreateAll(
+            new VisualDetectionSettings(Faces: _maskFaces),
+            info: message =>
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[✓] {message}");
+                Console.ResetColor();
+            },
+            warning: message =>
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[!] {message}");
+                Console.ResetColor();
+            });
+    }
+
+    private static void DisposeServices()
+    {
+        _ocrEngine?.Dispose();
+        _nameRecognizer?.Dispose();
+        foreach (var detector in _visualDetectors)
+            detector.Dispose();
     }
 
     /// <summary>
@@ -810,38 +724,8 @@ class Program
         Console.WriteLine("  --output <dir>, -o     Directory for output images and reports");
         Console.WriteLine("                         (default: ./output, or ~/ScreenGuard/output for the installed app).");
         Console.WriteLine("  --no-original          Do not save the unmasked original screenshot.");
+        Console.WriteLine("  --no-faces             Do not mask faces (photos, avatars, video calls).");
         Console.WriteLine("  --help, -h             Show this help message.");
         Console.WriteLine();
-    }
-}
-
-/// <summary>
-/// Buffers one capture's console output so concurrent processing workers print
-/// whole blocks instead of interleaved lines.
-/// </summary>
-internal sealed class CaptureLog
-{
-    private static readonly object ConsoleLock = new();
-    private readonly List<(ConsoleColor? Color, string Text)> _lines = new();
-    private ConsoleColor? _color;
-
-    public void Color(ConsoleColor color) => _color = color;
-
-    public void Reset() => _color = null;
-
-    public void Line(string text = "") => _lines.Add((_color, text));
-
-    public void Flush()
-    {
-        lock (ConsoleLock)
-        {
-            foreach (var (color, text) in _lines)
-            {
-                if (color.HasValue) Console.ForegroundColor = color.Value;
-                Console.WriteLine(text);
-                if (color.HasValue) Console.ResetColor();
-            }
-        }
-        _lines.Clear();
     }
 }

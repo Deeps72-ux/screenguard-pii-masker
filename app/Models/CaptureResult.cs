@@ -43,4 +43,7 @@ public class CaptureResult
 
     /// <summary>"ner" when the on-device name model ran, "labels-only" otherwise.</summary>
     public string NameRecognition { get; set; } = "labels-only";
+
+    /// <summary>Pixel-based detectors that ran on this frame, e.g. ["face"].</summary>
+    public List<string> VisualDetectors { get; set; } = [];
 }

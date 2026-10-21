@@ -80,6 +80,32 @@ classDiagram
         <<interface>>
         +FindNames(lines) List~List~OcrResult~~
     }
+    class IVisualPiiDetector {
+        <<interface>>
+        +Name string
+        +Detect(frame) List~PiiMatch~
+    }
+    class CaptureProcessor {
+        +Process(bitmap, source, x, y, ts, log) CaptureResult
+    }
+    class OnnxFaceDetector {
+        -InferenceSession _session
+        -FaceDetectorOptions _options
+        +Detect(frame) List~PiiMatch~
+    }
+    class VisualDetectorFactory {
+        <<static>>
+        +CreateAll(settings, info, warning) IReadOnlyList~IVisualPiiDetector~
+    }
+    class ImageTiler {
+        <<static>>
+        +Cover(w, h, inW, inH, scale, overlap)$ List~Tile~
+        +Whole(w, h, inW, inH)$ Tile
+    }
+    class NonMaxSuppression {
+        <<static>>
+        +Apply(boxes, iou, containment)$ List~ScoredBox~
+    }
 
     class PlatformFactory {
         <<static>>
@@ -161,6 +187,13 @@ classDiagram
     OnnxNameRecognizer --> BertWordPieceTokenizer
     PiiDetector --> INameRecognizer
     PlatformFactory --> WindowsDpiAwareness
+    IVisualPiiDetector <|.. OnnxFaceDetector
+    OnnxFaceDetector --> ImageTiler
+    OnnxFaceDetector --> NonMaxSuppression
+    VisualDetectorFactory --> OnnxFaceDetector
+    CaptureProcessor --> IVisualPiiDetector
+    CaptureProcessor --> PiiDetector
+    CaptureProcessor --> OcrEngine
 ```
 
 ---
@@ -267,8 +300,9 @@ void ScreenGuardFreeCapture(ScreenGuardCapture* capture);  // frees pixelData an
 ### 4.3 Shared Processing
 1. **Frame queue:** `BlockingCollection<CapturedFrame>` with capacity 8. Capture threads use
    `TryAdd` and never block; a full queue drops the frame and counts it.
-2. **Processing workers:** `clamp(ProcessorCount / 2, 1, 3)` threads run OCR, detection, masking and
-   disk I/O. Each buffers its console output in a `CaptureLog` and prints it as one block.
+2. **Processing workers:** `clamp(ProcessorCount / 2, 1, 3)` threads each call
+   `CaptureProcessor.Process`, which runs OCR + text detection and every visual detector
+   concurrently (one task per visual detector), then masking and disk I/O. Each buffers its console output in a `CaptureLog` and prints it as one block.
 3. **Thread safety:** the CLI OCR path starts one Tesseract process per call (safe concurrently);
    the in-process Tesseract engine is guarded by a lock; `InferenceSession.Run` is thread-safe;
    `_captureHistory` is protected by `lock`; counters use `Interlocked`.
@@ -386,6 +420,24 @@ least half the smaller height (same line). The longer match's type and text are 
 
 ---
 
+## 7a. Face Detection
+
+* **Model:** UltraFace `version-RFB-640` (ONNX model zoo, MIT; pinned commit, SHA-256 verified).
+  Input `1×3×480×640` RGB, normalised `(v − 127) / 128`; outputs `scores [1, N, 2]` and
+  `boxes [1, N, 4]` (corners normalised to the input).
+* **Tiling (`ImageTiler`):** one whole-frame pass (padded to 4:3) for large faces, plus overlapping
+  640×480 tiles at scale 0.5 and 1.0 (25 % overlap) so 20–40 px avatars are seen at a size the model
+  can detect. A 2880×1800 frame needs about 9 + 30 tiles; ~0.85 s on an M1, run in parallel with OCR.
+* **Filtering:** score ≥ 0.9 (0.8–0.9 included statues and fractal art in testing), boxes < 16 px
+  dropped, then `NonMaxSuppression` (IoU > 0.3, or > 70 % of the smaller box contained) merges
+  duplicates from overlapping tiles.
+* **Output:** each box is enlarged by 25 % per side (hair, ears, chin) and returned as a
+  `PiiMatch { Type = "Face" }`, so the existing masker, comparer and report handle it unchanged.
+* **Configuration:** all thresholds live in `FaceDetectorOptions`; `--no-faces` disables the detector;
+  reports list active detectors in `"visualDetectors"`.
+
+---
+
 ## 8. Visual Redaction Geometry & Fail-Closed Mode
 
 1. **Padding:** each region extends by $\Delta = 4\text{px}$ on all sides.
@@ -393,8 +445,10 @@ least half the smaller height (same line). The longer match's type and text are 
    $$\text{Left} = \max(0, X - \Delta), \quad \text{Right} = \min(W_{\text{image}}, X + W + \Delta)$$
    $$\text{Top} = \max(0, Y - \Delta), \quad \text{Bottom} = \min(H_{\text{image}}, Y + H + \Delta)$$
 3. **Layers:** solid black fill → crimson 2 px outline (`#E53935`) → badge `REDACTED: <TYPE>`.
-4. **Fail closed:** if OCR is unavailable or throws, the region list is a single
-   `FullFrame` box covering the whole image and the report records `"redactionMode": "full-frame"`.
+4. **Fail closed:** if OCR is unavailable or throws, or any visual detector throws, the region
+   list is a single `FullFrame` box covering the whole image and the report records
+   `"redactionMode": "full-frame"`. A detector whose model is missing at startup is not loaded
+   (with a warning) rather than failing every frame.
 
 ---
 

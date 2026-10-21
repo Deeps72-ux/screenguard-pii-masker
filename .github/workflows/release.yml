@@ -62,6 +62,7 @@ jobs:
           REPORT=$(ls "$RUNNER_TEMP"/verify/reports/*.json)
           grep -q '"redactionMode": "ocr"' "$REPORT"
           grep -q '"nameRecognition": "ner"' "$REPORT"
+          grep -A2 '"visualDetectors"' "$REPORT" | grep -q '"face"' 
           COUNT=$(grep -o '"totalDetected": [0-9]*' "$REPORT" | grep -o '[0-9]*$')
           echo "PII detected: $COUNT"
           test "$COUNT" -ge 9
@@ -113,6 +114,7 @@ jobs:
           Write-Host "Redaction mode: $($report.redactionMode)  PII detected: $($report.piiSummary.totalDetected)"
           if ($report.redactionMode -ne "ocr") { throw "OCR did not run on Windows" }
           if ($report.nameRecognition -ne "ner") { throw "Name recognition model did not load on Windows" }
+          if (-not ($report.visualDetectors -contains "face")) { throw "Face masking model did not load on Windows" }
           if ($report.piiSummary.totalDetected -lt 9) { throw "Expected at least 9 PII entities" }
 
       - name: Verify live GDI screen capture

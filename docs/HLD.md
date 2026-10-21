@@ -4,7 +4,7 @@
 
 Modern enterprise intelligence and process discovery platforms require real-time desktop activity capture to analyze user workflows. However, screen captures inherently expose highly confidential **Personally Identifiable Information (PII)** — such as Social Security Numbers (SSN), credit card numbers, email addresses, phone numbers, dates of birth and people's names. Capturing this data unredacted violates compliance mandates (GDPR, HIPAA, SOC 2, PCI-DSS).
 
-**ScreenGuard** is a privacy-first screen capture and redaction application for **macOS and Windows laptops**. It monitors global mouse click interactions, distinguishes the pointing device (**External Mouse vs. Built-in Trackpad**), identifies graphics devices (**iGPU vs. dGPU vs. eGPU**), captures the clicked display at native resolution, extracts text with on-device OCR, detects PII with pattern rules plus an on-device named-entity model, and produces redacted frames alongside side-by-side comparison artifacts and JSON audit reports.
+**ScreenGuard** is a privacy-first screen capture and redaction application for **macOS and Windows laptops**. It monitors global mouse click interactions, distinguishes the pointing device (**External Mouse vs. Built-in Trackpad**), identifies graphics devices (**iGPU vs. dGPU vs. eGPU**), captures the clicked display at native resolution, extracts text with on-device OCR, detects PII with pattern rules plus an on-device named-entity model, masks faces with an on-device face detector, and produces redacted frames alongside side-by-side comparison artifacts and JSON audit reports.
 
 ---
 
@@ -17,13 +17,14 @@ Modern enterprise intelligence and process discovery platforms require real-time
 4. **Display Capture Engine:** Capture the display under the click at native pixel resolution (Retina / DPI-scaled panels included).
 5. **On-Device OCR Extraction:** Extract word-level text and bounding boxes without writing screenshots to temporary files.
 6. **PII Detection Engine:** Detect SSN, email, phone, credit card (Luhn-validated), IP address, date of birth, passport, tax id, address, job title, credentials and person names.
-7. **Visual Redaction (PII Masking):** Render opaque redaction blocks with crimson borders and type badges over detected values, leaving field labels readable.
-8. **Comparison & Audit Reporting:** Save original, masked and side-by-side comparison images plus a JSON audit report per capture.
+7. **Face Masking:** Detect faces in photos, avatars and video calls, from large portraits down to ~20 px avatars, and redact them.
+8. **Visual Redaction (PII Masking):** Render opaque redaction blocks with crimson borders and type badges over detected values, leaving field labels readable.
+9. **Comparison & Audit Reporting:** Save original, masked and side-by-side comparison images plus a JSON audit report per capture.
 
 ### 2.2 Non-Functional Requirements (NFRs)
 * **Non-blocking input path:** The OS click callback only records the click and returns (microseconds), so macOS never disables the event tap and Windows never removes the mouse hook. Capture and processing run on worker threads.
 * **Throughput:** OCR is the bottleneck — about 2 s per 2880×1800 frame on an M1 MacBook Air (two OCR passes in parallel); up to three frames are processed concurrently. A bounded queue drops excess clicks during heavy bursts rather than growing memory without limit.
-* **Fail closed:** If OCR is unavailable or fails for a frame, the masked output redacts the **entire frame** instead of passing PII through.
+* **Fail closed:** If OCR or any visual detector (e.g. faces) fails for a frame, the masked output redacts the **entire frame** instead of passing PII through.
 * **Zero cloud dependency:** OCR and name recognition run 100 % locally. No telemetry and no network requests at runtime.
 * **Memory safety:** Native pixel buffers are freed deterministically in a `finally` block after being copied into managed bitmaps.
 * **Explicit permission handling:** Missing OS permissions are detected at startup with a clear message, instead of the app appearing to run while receiving no events.
@@ -61,6 +62,8 @@ graph TB
         OCR["OcrEngine<br/>(Tesseract, two passes)"]
         PII_DET["PiiDetector<br/>(line-scoped patterns + label fallback)"]
         NER["OnnxNameRecognizer<br/>(BERT NER, ONNX Runtime)"]
+        CP["CaptureProcessor<br/>(per-frame pipeline)"]
+        FACE["OnnxFaceDetector<br/>(UltraFace, tiled, IVisualPiiDetector)"]
         PII_MASK["PiiMasker"]
         COMPARER["ImageComparer<br/>(composite + JSON report)"]
         DISK["DiskWriter"]
@@ -81,10 +84,13 @@ graph TB
     PF --> HOOK
     PF --> WMI
 
-    Q --> OCR
+    Q --> CP
+    CP --> OCR
+    CP --> FACE
     OCR --> PII_DET
     NER --> PII_DET
     PII_DET --> PII_MASK
+    FACE --> PII_MASK
     PII_MASK --> COMPARER
     COMPARER --> DISK
 ```
@@ -108,8 +114,9 @@ graph TB
 ### 4.3 Shared C# .NET 8 Application (`ScreenGuard.App`)
 1. **SkiaSharp** for all image work on both platforms (no `System.Drawing`).
 2. **Tesseract** OCR: the CLI (bundled in the macOS app) or the in-process engine (bundled DLLs on Windows).
-3. **ONNX Runtime** runs a quantised BERT named-entity model to find person names that have no label or title.
-4. Modular services behind interfaces (`IScreenCaptureService`, `IGlobalInputMonitor`, `IGpuDetector`, `IOcrEngine`, `IPiiDetector`, `INameRecognizer`, `IPiiMasker`, `IImageComparer`, `IDiskWriter`).
+3. **ONNX Runtime** runs a quantised BERT named-entity model to find person names that have no label or title, and the UltraFace detector to find faces.
+4. **`CaptureProcessor`** owns the per-frame pipeline; every collaborator is injected as an interface, so platforms, OCR engines and detectors can be replaced or added without editing it.
+5. Modular services behind interfaces (`IScreenCaptureService`, `IGlobalInputMonitor`, `IGpuDetector`, `IOcrEngine`, `IPiiDetector`, `INameRecognizer`, `IVisualPiiDetector`, `IPiiMasker`, `IImageComparer`, `IDiskWriter`). Text-based (`IPiiDetector`) and pixel-based (`IVisualPiiDetector`) detection are separate interfaces; new pixel detectors are registered in `VisualDetectorFactory` only.
 
 ### 4.4 macOS P/Invoke Interop Bridge
 * `libscreencapture.dylib` is loaded in-process via .NET 8 P/Invoke with a custom resolver (app folder, `.app` bundle paths).
@@ -133,6 +140,7 @@ sequenceDiagram
     participant Proc as Processing worker
     participant OCR as OcrEngine
     participant PII as PiiDetector + NER
+    participant Face as Face detector
     participant Masker as PiiMasker
     participant Disk as DiskWriter
 
@@ -142,12 +150,18 @@ sequenceDiagram
     Worker->>Q: TryAdd(frame), dropped if queue is full
     Proc->>Q: take frame
     Proc->>Disk: save original (unless --no-original)
-    Proc->>OCR: two passes in parallel (as captured + high contrast)
-    alt OCR succeeded
+    par
+        Proc->>OCR: two passes in parallel (as captured + high contrast)
         OCR-->>Proc: words + bounding boxes
         Proc->>PII: patterns per line, label fallback, person names
-        PII-->>Proc: PII regions
-    else OCR unavailable or failed
+        PII-->>Proc: text PII regions
+    and
+        Proc->>Face: whole frame + overlapping tiles
+        Face-->>Proc: face regions
+    end
+    alt every detector succeeded
+        Proc->>Proc: merge text and face regions
+    else OCR or a detector unavailable or failed
         Proc->>Proc: single full-frame region (fail closed)
     end
     Proc->>Masker: draw redaction blocks
@@ -182,7 +196,8 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | Line-scoped patterns | SSN, email, phone, card, IP, DOB, passport, tax id, address, credentials, labelled names and titles | Luhn for unlabelled cards, separators for unlabelled SSNs, version-number context for IPs, stop-words for city + postcode |
 | Label fallback | A value OCR garbled (selection highlight, cursor, text caret) or that is missing entirely, when its label (`Email:`, `Passport:`) is readable — including labels clipped at the left screen edge | Requires a colon; clipped labels only at line start |
-| On-device NER | Free-standing person names (feeds, chat lists, email headers) | Only `PER` entities are masked; companies and places stay visible |
+| On-device NER | Free-standing person names (feeds, chat lists, email headers), including ALL-CAPS names | Only `PER` entities are masked; companies and places stay visible |
+| Face detector | Faces in photos, avatars and video calls (~20 px and up) | Score threshold 0.9 rejects statues and abstract art seen in testing |
 
 Matches never span two text lines, and only the words a match covers are boxed, so labels stay readable and boxes stay tight.
 
@@ -197,7 +212,7 @@ Matches never span two text lines, and only the words a match covers are boxed, 
 | **PII in Logs and Reports** | Console output and JSON reports use `MaskedPreview` (e.g. `12*******89`); raw PII values are never printed. |
 | **OCR Failure** | Fail closed: the whole frame is redacted and the report records `"redactionMode": "full-frame"`. |
 | **Memory Cleanup** | `ScreenGuardFreeCapture()` frees the native pixel buffer immediately after it is copied into a managed bitmap. |
-| **Supply Chain** | The NER model is downloaded at build time from a pinned commit and verified by SHA-256. |
+| **Supply Chain** | The NER and face models are downloaded at build time from pinned commits and verified by SHA-256. |
 
 ---
 
@@ -208,4 +223,5 @@ Matches never span two text lines, and only the words a match covers are boxed, 
 * **Graphics:** SkiaSharp 2.88
 * **OCR:** Tesseract 5 (CLI bundled in the macOS app; NuGet engine on Windows)
 * **Name recognition:** ONNX Runtime 1.20 + `dslim/bert-base-NER` (int8 ONNX, MIT)
+* **Face detection:** ONNX Runtime 1.20 + UltraFace `version-RFB-640` (ONNX model zoo, MIT)
 * **Operating systems:** macOS 12.3+ (Apple Silicon release build; Intel builds from source) and Windows 10/11 x64

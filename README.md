@@ -155,7 +155,7 @@ cd screenguard-pii-masker
 # Build the C++ native dylib
 ./scripts/build_native.sh
 
-# Download the on-device name-recognition model (~109 MB, pinned + checksum-verified)
+# Download the on-device name-recognition (~109 MB) and face-detection (~1.6 MB) models (pinned + checksum-verified)
 ./scripts/download_models.sh
 
 # Build the .NET application
@@ -194,6 +194,7 @@ dotnet run -- --scan path/to/screenshot.png
 ```bash
 dotnet run -- --output ./my-output    # custom output directory (also accepted as a bare argument)
 dotnet run -- --no-original           # do not keep the unmasked original screenshot
+dotnet run -- --no-faces              # do not mask faces
 ```
 
 ### Redaction Safety
@@ -202,6 +203,9 @@ dotnet run -- --no-original           # do not keep the unmasked original screen
 * If OCR is unavailable or fails for a capture, the masked output redacts the **entire frame** (`"redactionMode": "full-frame"` in the report) rather than passing PII through.
 * A field whose label is readable but whose value OCR garbled (text selection, caret, cursor) is still masked, including labels clipped at the left screen edge.
 * OCR runs twice per capture (as captured, and a high-contrast copy) to recover text inside selection highlights.
+
+### Faces (on-device face detection)
+Photos, profile avatars and video-call tiles are masked by the UltraFace detector (MIT, 1.6 MB) running locally through ONNX Runtime. The frame is scanned whole and as overlapping tiles, so avatars down to about 20 px are found. Disable with `--no-faces`. Reports list active pixel detectors in `"visualDetectors"`.
 
 ### Person Names (on-device NER)
 Names with a label (`Customer Name:`) or title (`Dr.`) are matched by patterns. Free-standing names — a LinkedIn feed, a chat list, an email header — are found by a BERT named-entity model ([dslim/bert-base-NER](https://huggingface.co/dslim/bert-base-NER), int8 ONNX, MIT) running locally through ONNX Runtime on macOS and Windows. Only person names are masked; companies and places are left visible. The model adds ~0.1–0.7 s per capture.
