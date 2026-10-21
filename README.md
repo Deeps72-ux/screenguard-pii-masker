@@ -267,6 +267,10 @@ ScreenGuard is distributed as standalone, self-contained packages for both **mac
 #   • dist/ScreenGuard-Windows-x64-v1.0.0.zip
 ```
 
+### Running the Installed App
+* **macOS:** drag `ScreenGuard.app` from the DMG to Applications and double-click it. It opens in a Terminal window; click anywhere to capture, press ENTER or Ctrl+C to stop. Results go to `~/ScreenGuard/output`. On first launch: right-click → Open (the app is not notarized), then grant **Input Monitoring** and **Screen Recording** to Terminal and reopen.
+* **Windows:** unzip and double-click `run.bat` (or `ScreenGuard.exe`). Results go to `output\` next to the executable.
+
 ### 2. Automated Distribution via GitHub Actions
 Creating and pushing a Git tag triggers the [.github/workflows/release.yml](.github/workflows/release.yml) workflow:
 ```bash

@@ -25,6 +25,7 @@
  */
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using SkiaSharp;
 using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
@@ -66,7 +67,7 @@ class Program
         PrintBanner();
 
         // ── Parse Arguments ─────────────────────────────────────────────
-        string outputDir = Path.Combine(Directory.GetCurrentDirectory(), "output");
+        string outputDir = DefaultOutputDirectory();
         bool testMode = false;
         bool benchmarkMode = false;
         string? scanFile = null;
@@ -207,14 +208,24 @@ class Program
         Console.ResetColor();
         Console.WriteLine();
 
-        // Wait for ENTER or Ctrl+C in a non-blocking thread wait
-        var inputThread = new Thread(() =>
+        // Stop on Ctrl+C (above), on a termination signal (e.g. the Terminal window closing),
+        // or on ENTER when a keyboard is attached. Without a keyboard (stdin redirected or
+        // closed) end-of-input must not count as ENTER, or the monitor would stop at once.
+        using var stopSignals = RegisterStopSignals();
+        if (!Console.IsInputRedirected)
         {
-            try { Console.ReadLine(); } catch { }
-            _exitEvent.Set();
-        })
-        { IsBackground = true };
-        inputThread.Start();
+            var inputThread = new Thread(() =>
+            {
+                try
+                {
+                    if (Console.ReadLine() != null)
+                        _exitEvent.Set();
+                }
+                catch { }
+            })
+            { IsBackground = true };
+            inputThread.Start();
+        }
 
         _exitEvent.Wait();
 
@@ -238,6 +249,68 @@ class Program
 
         PrintSessionSummary();
         return 0;
+    }
+
+    /// <summary>
+    /// Default output location. From an installed macOS app (or when the working directory is
+    /// not writable, e.g. "/" when launched from Finder) results go to ~/ScreenGuard/output;
+    /// otherwise to ./output next to where the command was run.
+    /// </summary>
+    private static string DefaultOutputDirectory()
+    {
+        string cwd = Directory.GetCurrentDirectory();
+        bool runningFromAppBundle = AppContext.BaseDirectory.Contains(".app/Contents/MacOS", StringComparison.Ordinal);
+
+        if (!runningFromAppBundle && IsWritableDirectory(cwd))
+            return Path.Combine(cwd, "output");
+
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, "ScreenGuard", "output");
+    }
+
+    private static bool IsWritableDirectory(string path)
+    {
+        try
+        {
+            string probe = Path.Combine(path, $".screenguard_write_test_{Guid.NewGuid():N}");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Treats SIGTERM / SIGHUP (closing the Terminal window, kill) like Ctrl+C so queued
+    /// captures are finished and the summary is printed.
+    /// </summary>
+    private static IDisposable RegisterStopSignals()
+    {
+        var registrations = new List<IDisposable>();
+        foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGHUP })
+        {
+            try
+            {
+                registrations.Add(PosixSignalRegistration.Create(signal, context =>
+                {
+                    context.Cancel = true;
+                    _exitEvent.Set();
+                }));
+            }
+            catch (PlatformNotSupportedException)
+            {
+                // SIGHUP does not exist on Windows
+            }
+        }
+        return new CompositeDisposable(registrations);
+    }
+
+    private sealed class CompositeDisposable(List<IDisposable> items) : IDisposable
+    {
+        public void Dispose() => items.ForEach(i => i.Dispose());
     }
 
     private static int ArgumentError(string message)
@@ -734,7 +807,8 @@ class Program
         Console.WriteLine("  --test, --once         Run a single live screen capture, process and exit.");
         Console.WriteLine("  --benchmark, --sample  Run synthetic PII benchmark (validates OCR, detection & masking).");
         Console.WriteLine("  --scan <image>, -s     Run OCR + PII masking on an existing image file.");
-        Console.WriteLine("  --output <dir>, -o     Directory for output images and reports (default: ./output).");
+        Console.WriteLine("  --output <dir>, -o     Directory for output images and reports");
+        Console.WriteLine("                         (default: ./output, or ~/ScreenGuard/output for the installed app).");
         Console.WriteLine("  --no-original          Do not save the unmasked original screenshot.");
         Console.WriteLine("  --help, -h             Show this help message.");
         Console.WriteLine();

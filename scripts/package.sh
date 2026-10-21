@@ -97,6 +97,19 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 # Copy all published files into Contents/MacOS
 cp -R "$STAGING_PUBLISH/"* "$MACOS_DIR/"
 
+# Bundle entry point. ScreenGuard is a console app: double-clicked from Finder it would
+# have no window and no keyboard, so the launcher reopens it inside a Terminal window.
+# Run from a terminal (or with arguments), it runs the app directly.
+cat > "$MACOS_DIR/ScreenGuardLauncher" << 'LAUNCHER'
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -t 1 ] || [ $# -gt 0 ]; then
+    exec "$DIR/ScreenGuard" "$@"
+fi
+exec open -a Terminal "$DIR/ScreenGuard"
+LAUNCHER
+chmod +x "$MACOS_DIR/ScreenGuardLauncher"
+
 # Also copy tessdata into Contents/Resources/tessdata
 mkdir -p "$RESOURCES_DIR/tessdata"
 cp -f "$TESSDATA_DIR/eng.traineddata" "$RESOURCES_DIR/tessdata/"
@@ -187,7 +200,7 @@ cat > "$CONTENTS_DIR/Info.plist" << EOF
     <key>CFBundleDisplayName</key>
     <string>ScreenGuard</string>
     <key>CFBundleExecutable</key>
-    <string>ScreenGuard</string>
+    <string>ScreenGuardLauncher</string>
     <key>CFBundleIdentifier</key>
     <string>com.screenguard.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -252,8 +265,10 @@ Version: ${VERSION} (${ARCH})
 =================================================
 
 QUICK START:
-1. Double-click "run.command" or run from Terminal:
-   ./ScreenGuard.app/Contents/MacOS/ScreenGuard
+1. Double-click ScreenGuard.app (or "run.command"). It opens in a Terminal
+   window; click anywhere to capture. Press ENTER or Ctrl+C to stop.
+   Results are saved to ~/ScreenGuard/output (original, masked,
+   comparison, reports).
 
 2. If macOS blocks execution with "unidentified developer" or Gatekeeper:
    Run in Terminal:
@@ -263,7 +278,8 @@ QUICK START:
    When prompted, grant:
    - Input Monitoring: System Settings > Privacy & Security > Input Monitoring
    - Screen Recording: System Settings > Privacy & Security > Screen Recording
-   Grant them to Terminal (or ScreenGuard.app), then quit and reopen it.
+   Grant them to Terminal (ScreenGuard runs inside Terminal), then quit
+   Terminal completely (Cmd+Q) and open ScreenGuard again.
 
 COMMAND-LINE OPTIONS:
   ./ScreenGuard.app/Contents/MacOS/ScreenGuard [output_dir]

@@ -180,9 +180,9 @@ public class PiiDetector : IPiiDetector
             @"\b(?<v>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:&|and)\s+\d+\s+others?\b",
             Opts)),
 
-        // Formal titles with name (e.g. Dr. Smith, Mr. Deepan, Dr. Robert J. Oppenheimer)
+        // Formal titles with name (e.g. Dr. Smith, Mr. Deepan, Dr. Robert J. Oppenheimer, Prof. P. V. Rathish Kumar)
         new("Name", new Regex(
-            @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+(?<v>[A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.?)?(?:[ \t]+[A-Z][a-zA-Z'\-]+)*)\b",
+            @"\b(?:Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+(?<v>(?:[A-Z]\.\s*)*[A-Z][a-zA-Z'\-]*(?:[ \t]+[A-Z]\.)*(?:[ \t]+[A-Z][a-zA-Z'\-]+)*)\b",
             Opts)),
 
         // Job Titles and Professional Designations (e.g., Job Title: Chief Financial Architect)

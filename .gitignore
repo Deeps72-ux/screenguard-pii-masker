@@ -34,3 +34,15 @@ test_pii.png
 
 
 docs/DEMO_GUIDE.md
+
+# Documentation Guides & Diagrams
+docs/01-click-capture-macos/
+docs/02-click-capture-windows/
+docs/03-input-device-classification/
+docs/04-gpu-detection/
+docs/05-ocr-text-extraction/
+docs/06-pii-detection/
+docs/07-name-recognition/
+docs/08-masking-and-output/
+docs/09-build-and-release/
+scripts/render_docs_diagrams.mjs
