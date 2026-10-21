@@ -6,6 +6,8 @@
  * padding/alignment for pointer and double fields on 64-bit platforms.
  */
 
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace ScreenGuard.App.Interop;
@@ -20,6 +22,37 @@ public static class NativeInterop
     /// "screencapture" → "libscreencapture.dylib".
     /// </summary>
     private const string LibName = "screencapture";
+
+    static NativeInterop()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(NativeInterop).Assembly, ResolveNativeLibrary);
+    }
+
+    private static IntPtr ResolveNativeLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (libraryName is LibName or "libscreencapture" or "libscreencapture.dylib")
+        {
+            string baseDir = AppContext.BaseDirectory;
+            string[] candidates =
+            [
+                Path.Combine(baseDir, "libscreencapture.dylib"),
+                Path.Combine(baseDir, "..", "Frameworks", "libscreencapture.dylib"),
+                Path.Combine(baseDir, "..", "Resources", "libscreencapture.dylib"),
+                Path.Combine(baseDir, "..", "libscreencapture.dylib"),
+                "/usr/local/lib/libscreencapture.dylib"
+            ];
+
+            foreach (var path in candidates)
+            {
+                if (File.Exists(path) && NativeLibrary.TryLoad(path, out var handle))
+                {
+                    return handle;
+                }
+            }
+        }
+
+        return IntPtr.Zero;
+    }
 
     /* ─────────────────────────────────────────────────────────────────── */
     /*  Callback Delegate                                                  */

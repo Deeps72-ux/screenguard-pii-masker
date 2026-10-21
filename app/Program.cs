@@ -469,8 +469,11 @@ class Program
         string[] candidateDirs =
         [
             Path.Combine(AppContext.BaseDirectory, "tessdata"),
+            Path.Combine(AppContext.BaseDirectory, "..", "Resources", "tessdata"),
             Path.Combine(Directory.GetCurrentDirectory(), "tessdata"),
             Path.Combine(Directory.GetCurrentDirectory(), "..", "tessdata"),
+            "/opt/homebrew/share/tessdata",
+            "/usr/local/share/tessdata"
         ];
 
         string? foundTessData = null;

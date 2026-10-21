@@ -32,6 +32,12 @@ if ! command -v cmake &> /dev/null; then
     exit 1
 fi
 
+# Reset build cache if the directory path has changed
+if [ -f "$BUILD_DIR/CMakeCache.txt" ] && ! grep -q "$PROJECT_DIR" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+    echo "       (Resetting stale CMake cache due to directory change)"
+    rm -rf "$BUILD_DIR"
+fi
+
 echo "[1/3] Configuring CMake..."
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"

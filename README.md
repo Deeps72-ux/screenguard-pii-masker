@@ -215,6 +215,31 @@ output/
 
 ---
 
+## 📦 Packaging & GitHub Releases Distribution
+
+ScreenGuard can be packaged as a standalone macOS `.app` bundle, a drag-and-drop `.dmg` installer, and a `.zip` archive containing both `ScreenGuard` and `libscreencapture.dylib` with zero external .NET runtime requirements.
+
+### 1. Build Local Release Packages
+```bash
+# Package for Apple Silicon (macOS arm64)
+./scripts/package.sh arm64 1.0.0
+
+# Outputs generated in dist/:
+#   • dist/ScreenGuard.app
+#   • dist/ScreenGuard-macOS-arm64-v1.0.0.dmg
+#   • dist/ScreenGuard-macOS-arm64-v1.0.0.zip
+```
+
+### 2. Automated Distribution via GitHub Actions
+Creating and pushing a Git tag triggers the [.github/workflows/release.yml](.github/workflows/release.yml) workflow:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+This automatically compiles on a macOS Apple Silicon runner, runs verification benchmarks, creates a GitHub Release, and publishes the `.dmg` and `.zip` binaries.
+
+---
+
 ## 👥 Author & Repository
 * **GitHub:** [@Deeps72-ux](https://github.com/Deeps72-ux)
 * **Repository:** [https://github.com/Deeps72-ux/screenguard-pii-masker](https://github.com/Deeps72-ux/screenguard-pii-masker)

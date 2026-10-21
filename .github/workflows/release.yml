@@ -1,0 +1,67 @@
+name: Release & Distribute Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "release-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build & Release macOS Apple Silicon (arm64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Dependencies
+        run: |
+          brew install cmake tesseract leptonica
+
+      - name: Determine Version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Package (App, ZIP, DMG)
+        run: |
+          chmod +x ./scripts/package.sh ./scripts/build_native.sh
+          ./scripts/package.sh arm64 ${{ steps.ver.outputs.version }}
+
+      - name: Verify Packaged Application
+        run: |
+          ./dist/ScreenGuard.app/Contents/MacOS/ScreenGuard --benchmark
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || format('v{0}', steps.ver.outputs.version) }}
+          name: ScreenGuard v${{ steps.ver.outputs.version }} (macOS Apple Silicon)
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/*.dmg
