@@ -70,7 +70,7 @@ public sealed class OnnxNameRecognizer : INameRecognizer
             var chunkWords = new List<OcrResult>();
             foreach (var word in words)
             {
-                var pieces = _tokenizer.TokenizeWord(word.Text);
+                var pieces = _tokenizer.TokenizeWord(NormalizeCase(word.Text));
                 if (pieces.Count == 0) continue;
 
                 if (ids.Count + pieces.Count + 1 > MaxSequenceLength && chunkWords.Count > 0)
@@ -123,6 +123,35 @@ public sealed class OnnxNameRecognizer : INameRecognizer
         }
 
         return names;
+    }
+
+    /// <summary>
+    /// The model is case-sensitive and scores ALL-CAPS text (certificates, headings, badges)
+    /// as non-names: "DEEPAN KULANDAISAMI" scores 0.00, "Deepan Kulandaisami" 1.00. All-caps
+    /// words are therefore scored in title case; headings like "THEORY OF COMPUTATION" stay
+    /// non-names either way.
+    /// </summary>
+    internal static string NormalizeCase(string text)
+    {
+        int letters = text.Count(char.IsLetter);
+        if (letters < 2 || text.Any(char.IsLower))
+            return text;
+
+        var chars = text.ToLowerInvariant().ToCharArray();
+        bool startOfPart = true;
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (char.IsLetter(chars[i]))
+            {
+                if (startOfPart) chars[i] = char.ToUpperInvariant(chars[i]);
+                startOfPart = false;
+            }
+            else
+            {
+                startOfPart = chars[i] is '-' or '\'' or '.';
+            }
+        }
+        return new string(chars);
     }
 
     /// <summary>Filters model output to plausible name tokens (a capital letter, not a lone symbol).</summary>
