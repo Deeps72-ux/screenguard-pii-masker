@@ -34,14 +34,49 @@ jobs:
         run: |
           ./scripts/build_native.sh
 
+      - name: Download name-recognition model
+        run: ./scripts/download_models.sh
+
       - name: Build and Run C# Benchmark
         run: |
           cd app
           dotnet build -c Release
           dotnet run -c Release -- --benchmark
 
+  build-and-test-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download Tesseract language data
+        run: |
+          New-Item -ItemType Directory -Force -Path tessdata | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata" -OutFile tessdata/eng.traineddata
+
+      - name: Download name-recognition model
+        shell: bash
+        run: ./scripts/download_models.sh
+
+      - name: Build and Run C# Benchmark (Windows)
+        run: |
+          cd app
+          dotnet run -c Release -- --benchmark -o "$env:RUNNER_TEMP/bench"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $report = Get-Content (Get-ChildItem "$env:RUNNER_TEMP/bench/reports/*.json")[0] | ConvertFrom-Json
+          if ($report.redactionMode -ne "ocr") { throw "OCR did not run on Windows" }
+          if ($report.nameRecognition -ne "ner") { throw "Name recognition model did not load on Windows" }
+
   deploy-pages:
-    needs: build-and-test
+    needs: [build-and-test, build-and-test-windows]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -6,7 +6,7 @@
 #   1. ScreenGuard.app (macOS Application Bundle)
 #   2. libscreencapture.dylib (Native C++ event tap & capture engine)
 #   3. .NET 8 self-contained runtime binaries
-#   4. Tesseract OCR language assets
+#   4. Tesseract OCR engine (CLI + dylibs, relinked into the bundle) and language assets
 #   5. ScreenGuard-macOS-{arch}.zip
 #   6. ScreenGuard-macOS-{arch}.dmg
 #
@@ -37,7 +37,7 @@ echo ""
 
 # ── Step 1: Build native C++ library ─────────────────────────────────────────
 echo "[1/6] Building native C++ library (libscreencapture.dylib)..."
-"$SCRIPT_DIR/build_native.sh"
+NATIVE_ARCH="$([ "$ARCH" = "x64" ] && echo x86_64 || echo arm64)" "$SCRIPT_DIR/build_native.sh"
 
 DYLIB_SRC="$APP_DIR/libscreencapture.dylib"
 if [ ! -f "$DYLIB_SRC" ]; then
@@ -55,6 +55,9 @@ if [ ! -f "$TESSDATA_DIR/eng.traineddata" ]; then
         "https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata"
 fi
 echo "       ✓ eng.traineddata ready ($(du -h "$TESSDATA_DIR/eng.traineddata" | cut -f1))"
+
+# Name-recognition (NER) model, copied into the publish output by the .csproj
+"$SCRIPT_DIR/download_models.sh"
 
 # ── Step 3: Publish self-contained .NET 8 app ────────────────────────────────
 echo ""
@@ -98,6 +101,81 @@ cp -R "$STAGING_PUBLISH/"* "$MACOS_DIR/"
 mkdir -p "$RESOURCES_DIR/tessdata"
 cp -f "$TESSDATA_DIR/eng.traineddata" "$RESOURCES_DIR/tessdata/"
 
+# Bundle the tesseract CLI and every non-system dylib it needs, rewritten to load from
+# the bundle, so OCR works on Macs without Homebrew.
+bundle_tesseract() {
+    local dest="$CONTENTS_DIR/Frameworks/tesseract"
+    local src
+    src="$(command -v tesseract || true)"
+    if [ -z "$src" ]; then
+        echo "✗ Error: tesseract not found. Install with: brew install tesseract"
+        exit 1
+    fi
+    src="$(realpath "$src")"
+    mkdir -p "$dest"
+    cp -f "$src" "$dest/tesseract"
+    chmod u+w "$dest/tesseract"
+
+    local queue=("$dest/tesseract")
+    local -a origins=("$(dirname "$src")")
+    while [ ${#queue[@]} -gt 0 ]; do
+        local file="${queue[0]}"
+        local origin="${origins[0]}"
+        queue=("${queue[@]:1}")
+        origins=("${origins[@]:1}")
+
+        # Skip the first line (file name) and, for dylibs, the LC_ID_DYLIB self-reference
+        local deps
+        deps="$(otool -L "$file" | tail -n +2 | awk '{print $1}')"
+        for dep in $deps; do
+            case "$dep" in
+                /usr/lib/*|/System/*) continue ;;
+            esac
+            local resolved="$dep"
+            case "$dep" in
+                @loader_path/*) resolved="$origin/${dep#@loader_path/}" ;;
+                @rpath/*)
+                    resolved=""
+                    for candidate in "$origin/${dep#@rpath/}" "$origin/../lib/${dep#@rpath/}" \
+                                     "/opt/homebrew/lib/${dep#@rpath/}" "/usr/local/lib/${dep#@rpath/}"; do
+                        if [ -f "$candidate" ]; then resolved="$candidate"; break; fi
+                    done
+                    ;;
+            esac
+            if [ -z "$resolved" ] || [ ! -f "$resolved" ]; then
+                echo "✗ Error: cannot resolve $dep needed by $(basename "$file")"
+                exit 1
+            fi
+
+            local name
+            name="$(basename "$dep")"
+            if [ "$(basename "$file")" = "$name" ]; then continue; fi
+            if [ ! -f "$dest/$name" ]; then
+                cp -fL "$resolved" "$dest/$name"
+                chmod u+w "$dest/$name"
+                install_name_tool -id "@loader_path/$name" "$dest/$name" 2>/dev/null
+                queue+=("$dest/$name")
+                origins+=("$(dirname "$(realpath "$resolved")")")
+            fi
+            install_name_tool -change "$dep" "@loader_path/$name" "$file" 2>/dev/null
+        done
+    done
+
+    # Relinking invalidates signatures; re-sign ad hoc so Apple Silicon will load them
+    for f in "$dest"/*; do
+        codesign --force --sign - "$f" 2>/dev/null
+    done
+
+    # Verify nothing still points outside the bundle
+    if otool -L "$dest"/* | grep -E "^\s+/(opt/homebrew|usr/local)/" >/dev/null; then
+        echo "✗ Error: bundled tesseract still references Homebrew paths"
+        exit 1
+    fi
+    "$dest/tesseract" --version >/dev/null 2>&1 || { echo "✗ Error: bundled tesseract does not run"; exit 1; }
+    echo "       ✓ Bundled tesseract + $(($(ls "$dest" | wc -l) - 1)) libraries into Frameworks/tesseract"
+}
+bundle_tesseract
+
 # Create Info.plist
 cat > "$CONTENTS_DIR/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -123,7 +201,7 @@ cat > "$CONTENTS_DIR/Info.plist" << EOF
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>12.3</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
@@ -183,14 +261,16 @@ QUICK START:
 
 3. SYSTEM PERMISSIONS REQUIRED:
    When prompted, grant:
+   - Input Monitoring: System Settings > Privacy & Security > Input Monitoring
    - Screen Recording: System Settings > Privacy & Security > Screen Recording
-   - Accessibility:    System Settings > Privacy & Security > Accessibility
+   Grant them to Terminal (or ScreenGuard.app), then quit and reopen it.
 
 COMMAND-LINE OPTIONS:
   ./ScreenGuard.app/Contents/MacOS/ScreenGuard [output_dir]
   ./ScreenGuard.app/Contents/MacOS/ScreenGuard --benchmark
   ./ScreenGuard.app/Contents/MacOS/ScreenGuard --test
   ./ScreenGuard.app/Contents/MacOS/ScreenGuard --scan <image_file>
+  ./ScreenGuard.app/Contents/MacOS/ScreenGuard --no-original
 EOF
 
 cd "$STAGING_ZIP"

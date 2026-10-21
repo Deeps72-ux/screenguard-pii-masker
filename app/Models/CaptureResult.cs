@@ -5,6 +5,9 @@ namespace ScreenGuard.App.Models;
 /// </summary>
 public class CaptureResult
 {
+    /// <summary>Unique capture identifier (e.g. "capture_20261021_231825_985").</summary>
+    public string CaptureId { get; set; } = "";
+
     /// <summary>Image width in pixels.</summary>
     public int Width { get; set; }
 
@@ -31,4 +34,13 @@ public class CaptureResult
 
     /// <summary>Number of PII regions detected and masked.</summary>
     public int PiiCount { get; set; }
+
+    /// <summary>
+    /// How the masked image was produced: "ocr" (detected regions masked) or
+    /// "full-frame" (OCR unavailable or failed, so the whole frame was redacted).
+    /// </summary>
+    public string RedactionMode { get; set; } = "ocr";
+
+    /// <summary>"ner" when the on-device name model ran, "labels-only" otherwise.</summary>
+    public string NameRecognition { get; set; } = "labels-only";
 }

@@ -42,6 +42,9 @@ if [ ! -f "$TESSDATA_DIR/eng.traineddata" ]; then
 fi
 echo "       ✓ eng.traineddata ready"
 
+# Name-recognition (NER) model, copied into the publish output by the .csproj
+"$SCRIPT_DIR/download_models.sh"
+
 # Publish self-contained Windows application
 echo ""
 echo "[2/3] Publishing self-contained .NET 8 application for $RID..."
@@ -57,6 +60,9 @@ dotnet publish ScreenGuard.App.csproj \
     -p:PublishSingleFile=false \
     -p:Version="$VERSION" \
     -o "$STAGING_PUBLISH" 2>&1 | sed 's/^/       /'
+
+# The macOS native library is copied by the csproj when present; it is not used on Windows
+rm -f "$STAGING_PUBLISH/libscreencapture.dylib"
 
 # Ensure tessdata is bundled
 mkdir -p "$STAGING_PUBLISH/tessdata"
@@ -87,13 +93,22 @@ QUICK START:
    ScreenGuard.exe --test
    ScreenGuard.exe --scan <image_path>
    ScreenGuard.exe -o C:\path\to\output
+   ScreenGuard.exe --no-original
+
+REQUIREMENTS:
+- Windows 10 or 11 (x64).
+- OCR uses the bundled Tesseract engine, which needs the Microsoft Visual C++
+  2015-2022 Redistributable (x64): https://aka.ms/vs/17/release/vc_redist.x64.exe
+  If OCR cannot start, every capture is fully redacted rather than saved unmasked.
 
 FEATURES ON WINDOWS:
 - Zero external runtime required (self-contained .NET 8).
-- Pure Win32 GDI high-performance frame capture (BitBlt).
+- Per-monitor, DPI-aware Win32 GDI capture of the display that was clicked.
 - Global mouse click interception via SetWindowsHookEx (WH_MOUSE_LL).
+- Touchpad vs external mouse detection via Raw Input (precision + legacy touchpads).
 - Automatic GPU hardware detection (Intel / NVIDIA / AMD).
 - Offline Tesseract OCR & regex PII redaction engine.
+- On-device person-name recognition (BERT NER via ONNX Runtime).
 EOF
 
 # Create ZIP archive

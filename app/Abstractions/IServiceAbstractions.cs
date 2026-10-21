@@ -23,6 +23,17 @@ public interface IPiiDetector
 }
 
 /// <summary>
+/// Abstraction for recognising free-standing person names (no label or title) in OCR lines.
+/// </summary>
+public interface INameRecognizer : IDisposable
+{
+    string Description { get; }
+
+    /// <summary>Returns each run of consecutive words recognised as a person's name.</summary>
+    List<List<OcrResult>> FindNames(IReadOnlyList<List<OcrResult>> lines);
+}
+
+/// <summary>
 /// Abstraction for non-destructive visual redaction of PII entities.
 /// </summary>
 public interface IPiiMasker

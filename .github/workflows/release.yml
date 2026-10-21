@@ -19,8 +19,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-release:
-    name: Build & Release Multi-Platform Packages (macOS & Windows)
+  version:
+    name: Determine Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: Build & Verify macOS (arm64)
+    needs: version
     runs-on: macos-14
     steps:
       - name: Checkout Repository
@@ -32,38 +48,117 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Install Dependencies
-        run: |
-          brew install cmake tesseract leptonica
-
-      - name: Determine Version
-        id: ver
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        run: brew install cmake tesseract
 
       - name: Build & Package macOS (App, ZIP, DMG)
         run: |
           chmod +x ./scripts/package.sh ./scripts/build_native.sh
-          ./scripts/package.sh arm64 ${{ steps.ver.outputs.version }}
+          ./scripts/package.sh arm64 ${{ needs.version.outputs.version }}
 
-      - name: Build & Package Windows (win-x64 ZIP)
+      - name: Verify packaged app without Homebrew on PATH
         run: |
-          chmod +x ./scripts/package_windows.sh
-          ./scripts/package_windows.sh ${{ steps.ver.outputs.version }}
+          env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            ./dist/ScreenGuard.app/Contents/MacOS/ScreenGuard --benchmark -o "$RUNNER_TEMP/verify"
+          REPORT=$(ls "$RUNNER_TEMP"/verify/reports/*.json)
+          grep -q '"redactionMode": "ocr"' "$REPORT"
+          grep -q '"nameRecognition": "ner"' "$REPORT"
+          COUNT=$(grep -o '"totalDetected": [0-9]*' "$REPORT" | grep -o '[0-9]*$')
+          echo "PII detected: $COUNT"
+          test "$COUNT" -ge 9
 
-      - name: Verify macOS Packaged Application
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: |
+            dist/*.zip
+            dist/*.dmg
+
+  windows:
+    name: Build & Verify Windows (x64)
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download Tesseract language data
         run: |
-          ./dist/ScreenGuard.app/Contents/MacOS/ScreenGuard --benchmark
+          New-Item -ItemType Directory -Force -Path tessdata | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata" -OutFile tessdata/eng.traineddata
+
+      - name: Download name-recognition model
+        shell: bash
+        run: ./scripts/download_models.sh
+
+      - name: Publish self-contained win-x64
+        run: |
+          dotnet publish app/ScreenGuard.App.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=false -p:Version=${{ needs.version.outputs.version }} -o publish
+          Remove-Item -ErrorAction SilentlyContinue publish/libscreencapture.dylib
+
+      - name: Verify OCR + masking (synthetic benchmark)
+        run: |
+          ./publish/ScreenGuard.exe --benchmark -o "$env:RUNNER_TEMP/bench"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $report = Get-Content (Get-ChildItem "$env:RUNNER_TEMP/bench/reports/*.json")[0] | ConvertFrom-Json
+          Write-Host "Redaction mode: $($report.redactionMode)  PII detected: $($report.piiSummary.totalDetected)"
+          if ($report.redactionMode -ne "ocr") { throw "OCR did not run on Windows" }
+          if ($report.nameRecognition -ne "ner") { throw "Name recognition model did not load on Windows" }
+          if ($report.piiSummary.totalDetected -lt 9) { throw "Expected at least 9 PII entities" }
+
+      - name: Verify live GDI screen capture
+        run: |
+          ./publish/ScreenGuard.exe --test -o "$env:RUNNER_TEMP/live"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Add-Type -AssemblyName System.Drawing
+          $png = (Get-ChildItem "$env:RUNNER_TEMP/live/original/*.png")[0].FullName
+          $bmp = [System.Drawing.Bitmap]::FromFile($png)
+          $px = $bmp.GetPixel([int]($bmp.Width / 2), [int]($bmp.Height / 2))
+          Write-Host "Captured $($bmp.Width)x$($bmp.Height), centre pixel alpha=$($px.A)"
+          if ($px.A -ne 255) { throw "Captured screenshot is transparent" }
+
+      - name: Package Windows ZIP
+        run: |
+          @"
+          @echo off
+          title ScreenGuard PII Masker
+          cd /d "%~dp0"
+          ScreenGuard.exe %*
+          pause
+          "@ | Set-Content -Encoding ascii publish/run.bat
+          Compress-Archive -Path publish/* -DestinationPath "ScreenGuard-Windows-x64-v${{ needs.version.outputs.version }}.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: ScreenGuard-Windows-x64-*.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: [version, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || format('v{0}', steps.ver.outputs.version) }}
-          name: ScreenGuard v${{ steps.ver.outputs.version }} (macOS & Windows)
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.version.outputs.version) || github.ref_name }}
+          name: ScreenGuard v${{ needs.version.outputs.version }} (macOS & Windows)
           draft: false
           prerelease: false
           generate_release_notes: true

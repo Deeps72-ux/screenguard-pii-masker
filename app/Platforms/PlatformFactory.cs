@@ -19,6 +19,18 @@ public static class PlatformFactory
         IsWindows ? "Microsoft Windows" :
         RuntimeInformation.OSDescription;
 
+    /// <summary>
+    /// Process-wide platform setup that must happen before any capture or hook is created.
+    /// </summary>
+    public static void InitializeProcess()
+    {
+        if (IsWindows)
+        {
+            WindowsDpiAwareness.Enable();
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+        }
+    }
+
     public static IScreenCaptureService CreateCaptureService()
     {
         if (IsMacOS)

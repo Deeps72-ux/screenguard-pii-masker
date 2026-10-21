@@ -8,7 +8,8 @@
  *     - Event Subtype + IOKit HID for External Mouse vs Trackpad classification
  *     - ScreenCaptureKit for high-performance screen capture
  *     - Metal API for GPU detection (Integrated iGPU vs Discrete dGPU)
- *     - Dispatches captured pixel buffer to C# via P/Invoke callback
+ *     - Dispatches captured pixel buffer to C# via P/Invoke callback (from a capture
+ *       worker thread, so the event tap never blocks)
  *
  *   C# Managed Layer (.NET 8):
  *     - P/Invoke interop with 64-bit alignment matched structures
@@ -18,9 +19,12 @@
  *     - PiiMasker: Non-destructive visual masking with red outline and badges
  *     - ImageComparer: Side-by-side visual comparison composite and JSON audit reports
  *     - DiskWriter: Organizes original, masked, comparison, and report artifacts
+ *
+ *   Captured frames are queued and processed on a dedicated thread. If OCR is unavailable
+ *   or fails for a frame, the whole frame is redacted (fail closed) rather than saved as-is.
  */
 
-using System.Runtime.InteropServices;
+using System.Collections.Concurrent;
 using SkiaSharp;
 using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
@@ -33,7 +37,8 @@ class Program
 {
     // ── Services (Abstracted for SOLID & Cross-Platform Support) ─────────
     private static readonly ImageConverter _imageConverter = new();
-    private static readonly IPiiDetector _piiDetector = new PiiDetector();
+    private static IPiiDetector _piiDetector = new PiiDetector();
+    private static INameRecognizer? _nameRecognizer;
     private static readonly IPiiMasker _piiMasker = new PiiMasker();
     private static readonly IImageComparer _imageComparer = new ImageComparer();
     private static IOcrEngine? _ocrEngine;
@@ -43,12 +48,21 @@ class Program
     private static IGpuDetector _gpuDetector = null!;
 
     // ── State ───────────────────────────────────────────────────────────
+    private const int MaxQueuedFrames = 8;
+
+    // OCR is the bottleneck (~2s per Retina frame); process a few frames concurrently
+    private static readonly int ProcessingWorkers = Math.Clamp(Environment.ProcessorCount / 2, 1, 3);
+
     private static int _captureCount = 0;
+    private static int _droppedFrames = 0;
+    private static bool _saveOriginals = true;
     private static readonly List<CaptureResult> _captureHistory = new();
     private static readonly ManualResetEventSlim _exitEvent = new(false);
+    private static readonly BlockingCollection<CapturedFrame> _frameQueue = new(MaxQueuedFrames);
 
-    static void Main(string[] args)
+    static int Main(string[] args)
     {
+        PlatformFactory.InitializeProcess();
         PrintBanner();
 
         // ── Parse Arguments ─────────────────────────────────────────────
@@ -63,7 +77,7 @@ class Program
             if (arg is "--help" or "-h")
             {
                 PrintHelp();
-                return;
+                return 0;
             }
             if (arg is "--test" or "--once")
             {
@@ -73,38 +87,61 @@ class Program
             {
                 benchmarkMode = true;
             }
-            else if (arg is "--scan" or "-s" && i + 1 < args.Length)
+            else if (arg is "--no-original")
             {
+                _saveOriginals = false;
+            }
+            else if (arg is "--scan" or "-s")
+            {
+                if (i + 1 >= args.Length || args[i + 1].StartsWith('-'))
+                    return ArgumentError($"{args[i]} requires an image path.");
                 scanFile = args[++i];
             }
-            else if (arg is "--output" or "-o" && i + 1 < args.Length)
+            else if (arg is "--output" or "-o")
             {
+                if (i + 1 >= args.Length || args[i + 1].StartsWith('-'))
+                    return ArgumentError($"{args[i]} requires a directory path.");
                 outputDir = args[++i];
             }
             else if (!arg.StartsWith('-'))
             {
                 outputDir = args[i];
             }
+            else
+            {
+                return ArgumentError($"Unknown option: {args[i]}");
+            }
         }
 
-        _diskWriter = new DiskWriter(outputDir);
+        try
+        {
+            _diskWriter = new DiskWriter(outputDir);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[✗] Cannot write to output directory '{outputDir}': {ex.Message}");
+            Console.WriteLine("    Choose a writable location with --output <dir>.");
+            Console.ResetColor();
+            return 1;
+        }
         Console.WriteLine();
 
-        // ── Initialize OCR ──────────────────────────────────────────────
+        // ── Initialize OCR and name recognition ─────────────────────────
         InitializeOcr();
+        InitializeNameRecognizer();
         Console.WriteLine();
 
         // ── Mode Execution ──────────────────────────────────────────────
         if (!string.IsNullOrEmpty(scanFile))
         {
-            RunScanFile(scanFile);
-            return;
+            return RunScanFile(scanFile) ? 0 : 1;
         }
 
         if (benchmarkMode)
         {
             RunSyntheticBenchmark();
-            return;
+            return 0;
         }
 
         // ── Initialize Cross-Platform Services ──────────────────────────
@@ -112,23 +149,8 @@ class Program
         _inputMonitor = PlatformFactory.CreateInputMonitor(_captureService);
         _gpuDetector = PlatformFactory.CreateGpuDetector();
 
-        _inputMonitor.OnFrameCaptured += frame =>
-        {
-            using (frame)
-            {
-                int count = Interlocked.Increment(ref _captureCount);
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine();
-                Console.WriteLine($"┌─ Capture #{count} ──────────────────────────────────────────");
-                Console.WriteLine($"│  Platform:        {PlatformFactory.PlatformName}");
-                Console.WriteLine($"│  Click Position:  ({frame.ClickX:F0}, {frame.ClickY:F0})");
-                Console.WriteLine($"│  Input Device:    {frame.InputSource}");
-                Console.WriteLine($"│  Resolution:      {frame.Width}x{frame.Height}");
-                Console.ResetColor();
-
-                ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs);
-            }
-        };
+        // Capture threads only enqueue; OCR and disk I/O run on the processing thread
+        _inputMonitor.OnFrameCaptured += EnqueueFrame;
 
         // ── Print GPU Information ───────────────────────────────────────
         PrintGpuInfo();
@@ -136,10 +158,11 @@ class Program
 
         if (testMode)
         {
-            RunSingleCaptureTest();
+            bool captured = RunSingleCaptureTest();
             _ocrEngine?.Dispose();
+        _nameRecognizer?.Dispose();
             PrintSessionSummary();
-            return;
+            return captured ? 0 : 1;
         }
 
         Console.ForegroundColor = ConsoleColor.Cyan;
@@ -152,13 +175,18 @@ class Program
             Console.WriteLine($"[✗] Failed to initialize input monitoring on {PlatformFactory.PlatformName}.");
             if (PlatformFactory.IsMacOS)
             {
-                Console.WriteLine("    Possible causes:");
-                Console.WriteLine("    • Input Monitoring permission missing (System Settings → Privacy & Security → Input Monitoring)");
-                Console.WriteLine("    • Screen Recording permission missing (System Settings → Privacy & Security → Screen Recording)");
+                Console.WriteLine("    Grant both permissions to your terminal (or ScreenGuard.app), then quit and reopen it:");
+                Console.WriteLine("    • Input Monitoring: System Settings → Privacy & Security → Input Monitoring");
+                Console.WriteLine("    • Screen Recording: System Settings → Privacy & Security → Screen Recording");
             }
             Console.ResetColor();
-            return;
+            return 1;
         }
+
+        var processingThreads = Enumerable.Range(0, ProcessingWorkers)
+            .Select(i => new Thread(ProcessQueuedFrames) { IsBackground = true, Name = $"CaptureProcessing{i}" })
+            .ToList();
+        processingThreads.ForEach(t => t.Start());
 
         // ── Setup Console Cancellation (Ctrl+C) ─────────────────────────
         Console.CancelKeyPress += (sender, e) =>
@@ -197,9 +225,94 @@ class Program
 
         _inputMonitor.Stop();
         _inputMonitor.Dispose();
+
+        // Finish frames that were already captured before exiting
+        _frameQueue.CompleteAdding();
+        if (_frameQueue.Count > 0)
+        {
+            Console.WriteLine($"[*] Finishing {_frameQueue.Count} queued capture(s)...");
+        }
+        processingThreads.ForEach(t => t.Join());
         _ocrEngine?.Dispose();
+        _nameRecognizer?.Dispose();
 
         PrintSessionSummary();
+        return 0;
+    }
+
+    private static int ArgumentError(string message)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"[✗] {message}");
+        Console.ResetColor();
+        Console.WriteLine();
+        PrintHelp();
+        return 2;
+    }
+
+    /// <summary>
+    /// Called on the platform capture thread. Never blocks: when the processing queue is
+    /// full the frame is dropped and counted.
+    /// </summary>
+    private static void EnqueueFrame(CapturedFrame frame)
+    {
+        bool queued;
+        try
+        {
+            queued = _frameQueue.TryAdd(frame);
+        }
+        catch (InvalidOperationException)
+        {
+            queued = false; // shutting down
+        }
+
+        if (!queued)
+        {
+            frame.Dispose();
+            Interlocked.Increment(ref _droppedFrames);
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("[!] Processing queue full; capture dropped.");
+            Console.ResetColor();
+        }
+    }
+
+    /// <summary>
+    /// Processing thread: runs OCR, masking and disk writes for each queued frame.
+    /// </summary>
+    private static void ProcessQueuedFrames()
+    {
+        foreach (var frame in _frameQueue.GetConsumingEnumerable())
+        {
+            using (frame)
+            {
+                var log = new CaptureLog();
+                try
+                {
+                    int count = Interlocked.Increment(ref _captureCount);
+                    log.Color(ConsoleColor.Yellow);
+                    log.Line();
+                    log.Line($"┌─ Capture #{count} ──────────────────────────────────────────");
+                    log.Line($"│  Platform:        {PlatformFactory.PlatformName}");
+                    log.Line($"│  Click Position:  ({frame.ClickX:F0}, {frame.ClickY:F0}) px");
+                    log.Line($"│  Input Device:    {frame.InputSource}");
+                    log.Line($"│  Resolution:      {frame.Width}x{frame.Height}");
+                    log.Reset();
+
+                    ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs, log);
+                }
+                catch (Exception ex)
+                {
+                    log.Color(ConsoleColor.Red);
+                    log.Line($"│  [✗] Failed to process capture: {ex.Message}");
+                    log.Line("└───────────────────────────────────────────────────────");
+                    log.Reset();
+                }
+                finally
+                {
+                    log.Flush();
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -210,74 +323,103 @@ class Program
         string inputSource,
         double clickX,
         double clickY,
-        long timestampMs)
+        long timestampMs,
+        CaptureLog log)
     {
         string timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestampMs)
             .ToLocalTime().ToString("yyyyMMdd_HHmmss_fff");
         string captureId = $"capture_{timestamp}";
 
         // 1. Save original screenshot
-        string originalPath = _diskWriter.SaveOriginal(bitmap, timestamp);
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"│  [✓] Original saved:   {Path.GetFileName(originalPath)}");
-        Console.ResetColor();
+        string originalPath = "";
+        if (_saveOriginals)
+        {
+            originalPath = _diskWriter.SaveOriginal(bitmap, timestamp);
+            log.Color(ConsoleColor.Green);
+            log.Line($"│  [✓] Original saved:   {Path.GetFileName(originalPath)}");
+            log.Reset();
+        }
 
         // 2. OCR and PII Detection
         var piiMatches = new List<PiiMatch>();
+        bool ocrSucceeded = false;
         if (_ocrEngine != null)
         {
             try
             {
                 var ocrResults = _ocrEngine.ExtractTextWithBounds(bitmap);
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"│  [~] OCR extracted {ocrResults.Count} word tokens. Scanning for PII...");
-                Console.ResetColor();
+                log.Color(ConsoleColor.DarkGray);
+                log.Line($"│  [~] OCR extracted {ocrResults.Count} word tokens. Scanning for PII...");
+                log.Reset();
 
                 piiMatches = _piiDetector.DetectPii(ocrResults);
+                ocrSucceeded = true;
 
                 if (piiMatches.Count > 0)
                 {
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.WriteLine($"│  [!] Detected {piiMatches.Count} PII entity(s) for redaction:");
+                    log.Color(ConsoleColor.Magenta);
+                    log.Line($"│  [!] Detected {piiMatches.Count} PII entity(s) for redaction:");
                     foreach (var match in piiMatches)
                     {
-                        Console.WriteLine($"│      • {match}");
+                        log.Line($"│      • {match}");
                     }
-                    Console.ResetColor();
+                    log.Reset();
                 }
                 else
                 {
-                    Console.ForegroundColor = ConsoleColor.DarkGray;
-                    Console.WriteLine("│  [i] OCR completed: 0 PII entities detected.");
-                    Console.ResetColor();
+                    log.Color(ConsoleColor.DarkGray);
+                    log.Line("│  [i] OCR completed: 0 PII entities detected.");
+                    log.Reset();
                 }
             }
             catch (Exception ex)
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"│  [!] OCR / PII detection notice: {ex.Message}");
-                Console.ResetColor();
+                log.Color(ConsoleColor.Yellow);
+                log.Line($"│  [!] OCR / PII detection failed: {ex.Message}");
+                log.Reset();
             }
+        }
+
+        // Fail closed: without a successful OCR pass we cannot know where PII is,
+        // so the masked output redacts the entire frame instead of passing it through.
+        if (!ocrSucceeded)
+        {
+            piiMatches =
+            [
+                new PiiMatch
+                {
+                    Type = "FullFrame",
+                    OriginalText = "",
+                    X = 0,
+                    Y = 0,
+                    Width = bitmap.Width,
+                    Height = bitmap.Height
+                }
+            ];
+            log.Color(ConsoleColor.Yellow);
+            log.Line("│  [!] OCR unavailable — entire frame redacted (fail closed).");
+            log.Reset();
         }
 
         // 3. Apply Visual Masking
         using var maskedBitmap = _piiMasker.ApplyMask(bitmap, piiMatches);
         string maskedPath = _diskWriter.SaveMasked(maskedBitmap, timestamp);
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"│  [✓] Masked saved:     {Path.GetFileName(maskedPath)}");
-        Console.ResetColor();
+        log.Color(ConsoleColor.Green);
+        log.Line($"│  [✓] Masked saved:     {Path.GetFileName(maskedPath)}");
+        log.Reset();
 
         // 4. Create Side-by-Side Comparison Composite
         using var comparisonBitmap = _imageComparer.CreateSideBySideComparison(
             bitmap, maskedBitmap, piiMatches, captureId, inputSource);
         string comparisonPath = _diskWriter.SaveComparison(comparisonBitmap, timestamp);
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"│  [✓] Comparison saved: {Path.GetFileName(comparisonPath)}");
-        Console.ResetColor();
+        log.Color(ConsoleColor.Cyan);
+        log.Line($"│  [✓] Comparison saved: {Path.GetFileName(comparisonPath)}");
+        log.Reset();
 
         // 5. Generate Audit Report
         var resultModel = new CaptureResult
         {
+            CaptureId = captureId,
             Width = bitmap.Width,
             Height = bitmap.Height,
             InputSource = inputSource,
@@ -286,36 +428,38 @@ class Program
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestampMs),
             OriginalImagePath = originalPath,
             MaskedImagePath = maskedPath,
-            PiiCount = piiMatches.Count
+            PiiCount = ocrSucceeded ? piiMatches.Count : 0,
+            RedactionMode = ocrSucceeded ? "ocr" : "full-frame",
+            NameRecognition = _nameRecognizer != null ? "ner" : "labels-only"
         };
 
         string jsonReport = _imageComparer.GenerateJsonReport(resultModel, piiMatches, comparisonPath);
         string reportPath = _diskWriter.SaveReport(jsonReport, timestamp);
-        Console.ForegroundColor = ConsoleColor.DarkCyan;
-        Console.WriteLine($"│  [✓] Report saved:     {Path.GetFileName(reportPath)}");
-        Console.ResetColor();
+        log.Color(ConsoleColor.DarkCyan);
+        log.Line($"│  [✓] Report saved:     {Path.GetFileName(reportPath)}");
+        log.Reset();
 
         lock (_captureHistory)
         {
             _captureHistory.Add(resultModel);
         }
 
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("└───────────────────────────────────────────────────────");
-        Console.ResetColor();
+        log.Color(ConsoleColor.DarkGray);
+        log.Line("└───────────────────────────────────────────────────────");
+        log.Reset();
     }
 
     /// <summary>
     /// Processes a static image file directly through the OCR and PII redaction pipeline.
     /// </summary>
-    private static void RunScanFile(string path)
+    private static bool RunScanFile(string path)
     {
         if (!File.Exists(path))
         {
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"[✗] Image file not found: {path}");
             Console.ResetColor();
-            return;
+            return false;
         }
 
         Console.ForegroundColor = ConsoleColor.Cyan;
@@ -328,16 +472,19 @@ class Program
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"[✗] Failed to decode image: {path}");
             Console.ResetColor();
-            return;
+            return false;
         }
 
-        ProcessCapture(bitmap, "ManualScan", 0, 0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var log = new CaptureLog();
+        ProcessCapture(bitmap, "ManualScan", 0, 0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), log);
+        log.Flush();
+        return true;
     }
 
     /// <summary>
     /// Runs a single screen capture test using the cross-platform capture service.
     /// </summary>
-    private static void RunSingleCaptureTest()
+    private static bool RunSingleCaptureTest()
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"\n[*] Executing single test screen capture via {_captureService.GetType().Name}...");
@@ -349,10 +496,14 @@ class Program
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("[✗] Screen capture returned null.");
             Console.ResetColor();
-            return;
+            return false;
         }
 
-        ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs);
+        var log = new CaptureLog();
+        log.Line($"│  Resolution:      {frame.Width}x{frame.Height}");
+        ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs, log);
+        log.Flush();
+        return true;
     }
 
     /// <summary>
@@ -396,6 +547,7 @@ class Program
             canvas.DrawText("Server IP:        192.168.1.105", 50, 380, textPaint);
             canvas.DrawText("Date of Birth:    01/11/1985", 50, 430, textPaint);
             canvas.DrawText("Passport ID:      A12345678", 50, 480, textPaint);
+            canvas.DrawText("Reviewed by Sarah Johnson on Monday.", 50, 530, textPaint);
 
             canvas.Flush();
         }
@@ -405,7 +557,9 @@ class Program
         Console.ResetColor();
 
         long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        ProcessCapture(bitmap, "Synthetic Benchmark", 600, 350, nowMs);
+        var log = new CaptureLog();
+        ProcessCapture(bitmap, "Synthetic Benchmark", 600, 350, nowMs, log);
+        log.Flush();
         PrintSessionSummary();
     }
 
@@ -455,6 +609,49 @@ class Program
     }
 
     /// <summary>
+    /// Loads the on-device NER model used to mask person names that have no label or title.
+    /// Without it, only labelled ("Customer Name:") and titled ("Dr.") names are masked.
+    /// </summary>
+    private static void InitializeNameRecognizer()
+    {
+        string[] candidateDirs =
+        [
+            Path.Combine(AppContext.BaseDirectory, "models", "ner"),
+            Path.Combine(AppContext.BaseDirectory, "..", "Resources", "models", "ner"),
+            Path.Combine(Directory.GetCurrentDirectory(), "models", "ner"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "models", "ner")
+        ];
+
+        string? modelDir = candidateDirs.FirstOrDefault(dir =>
+            File.Exists(Path.Combine(dir, "model.onnx")) && File.Exists(Path.Combine(dir, "vocab.txt")));
+
+        if (modelDir == null)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("[!] Name recognition model not found (run scripts/download_models.sh).");
+            Console.WriteLine("    Only labelled or titled names will be masked.");
+            Console.ResetColor();
+            return;
+        }
+
+        try
+        {
+            _nameRecognizer = new OnnxNameRecognizer(modelDir);
+            _piiDetector = new PiiDetector(_nameRecognizer);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"[✓] Name recognition initialized: {_nameRecognizer.Description}");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[!] Name recognition unavailable: {ex.Message}");
+            Console.WriteLine("    Only labelled or titled names will be masked.");
+            Console.ResetColor();
+        }
+    }
+
+    /// <summary>
     /// Displays GPU information retrieved from the cross-platform GPU detector.
     /// </summary>
     private static void PrintGpuInfo()
@@ -497,11 +694,15 @@ class Program
 
         int mouseCount = history.Count(c => c.InputSource == "External Mouse");
         int trackpadCount = history.Count(c => c.InputSource == "Trackpad");
+        int otherCount = history.Count(c => c.InputSource is not ("External Mouse" or "Trackpad"));
         int totalPii = history.Sum(c => c.PiiCount);
 
         Console.WriteLine($"║  • External Mouse Clicks:   {mouseCount,6}                            ║");
         Console.WriteLine($"║  • Trackpad Clicks:         {trackpadCount,6}                            ║");
+        Console.WriteLine($"║  • Other / Unknown:         {otherCount,6}                            ║");
         Console.WriteLine($"║  • Total PII Entities:      {totalPii,6}                            ║");
+        if (_droppedFrames > 0)
+            Console.WriteLine($"║  • Dropped (queue full):    {_droppedFrames,6}                            ║");
         Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");
         Console.ResetColor();
         Console.WriteLine();
@@ -525,13 +726,48 @@ class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine("Usage: dotnet run [options]");
+        Console.WriteLine("Usage: ScreenGuard [options] [output_dir]");
+        Console.WriteLine();
+        Console.WriteLine("With no mode option, monitors mouse/trackpad clicks and captures the screen on each click.");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --test, --once         Run a single live screen capture, process and exit.");
         Console.WriteLine("  --benchmark, --sample  Run synthetic PII benchmark (validates OCR, detection & masking).");
-        Console.WriteLine("  --output <dir>, -o     Specify custom directory for output images and reports.");
+        Console.WriteLine("  --scan <image>, -s     Run OCR + PII masking on an existing image file.");
+        Console.WriteLine("  --output <dir>, -o     Directory for output images and reports (default: ./output).");
+        Console.WriteLine("  --no-original          Do not save the unmasked original screenshot.");
         Console.WriteLine("  --help, -h             Show this help message.");
         Console.WriteLine();
+    }
+}
+
+/// <summary>
+/// Buffers one capture's console output so concurrent processing workers print
+/// whole blocks instead of interleaved lines.
+/// </summary>
+internal sealed class CaptureLog
+{
+    private static readonly object ConsoleLock = new();
+    private readonly List<(ConsoleColor? Color, string Text)> _lines = new();
+    private ConsoleColor? _color;
+
+    public void Color(ConsoleColor color) => _color = color;
+
+    public void Reset() => _color = null;
+
+    public void Line(string text = "") => _lines.Add((_color, text));
+
+    public void Flush()
+    {
+        lock (ConsoleLock)
+        {
+            foreach (var (color, text) in _lines)
+            {
+                if (color.HasValue) Console.ForegroundColor = color.Value;
+                Console.WriteLine(text);
+                if (color.HasValue) Console.ResetColor();
+            }
+        }
+        _lines.Clear();
     }
 }

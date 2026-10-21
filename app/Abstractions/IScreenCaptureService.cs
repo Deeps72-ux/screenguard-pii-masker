@@ -10,4 +10,10 @@ public interface IScreenCaptureService
 {
     /// <summary>Captures the current screen display.</summary>
     CapturedFrame? CaptureScreen();
+
+    /// <summary>
+    /// Captures the display containing the given screen point. Platforms that capture a
+    /// fixed display ignore the point.
+    /// </summary>
+    CapturedFrame? CaptureScreenAt(int x, int y) => CaptureScreen();
 }

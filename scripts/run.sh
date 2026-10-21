@@ -30,6 +30,9 @@ if [ ! -f "$TESSDATA_DIR/eng.traineddata" ]; then
     echo "    ✓ Downloaded eng.traineddata ($(du -h "$TESSDATA_DIR/eng.traineddata" | cut -f1))"
 fi
 
+# ── Step 2b: Download the name-recognition (NER) model if needed ─────────
+"$SCRIPT_DIR/download_models.sh"
+
 # ── Step 3: Build and run C# application ────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"

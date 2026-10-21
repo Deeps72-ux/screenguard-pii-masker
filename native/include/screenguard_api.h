@@ -60,8 +60,8 @@ typedef struct {
     int         stride;         /**< Bytes per row (may include padding) */
     uint8_t*    pixelData;      /**< Raw BGRA pixel buffer (malloc'd) */
     int         inputSource;    /**< SG_INPUT_* constant */
-    double      clickX;         /**< Screen X coordinate of click */
-    double      clickY;         /**< Screen Y coordinate of click */
+    double      clickX;         /**< Click X in captured-image pixel coordinates */
+    double      clickY;         /**< Click Y in captured-image pixel coordinates */
     int64_t     timestampMs;    /**< Unix epoch milliseconds */
 } ScreenGuardCapture;
 
@@ -95,9 +95,15 @@ typedef void (*ScreenGuardCaptureCallback)(ScreenGuardCapture* capture);
  * and GPU detection.
  *
  * @param callback  Function pointer to invoke on each mouse click capture.
+ * Clicks are queued from the event tap and captured on a dedicated worker
+ * thread, so the tap never blocks and macOS never disables it for timing out.
+ * The callback is invoked on that worker thread.
+ *
  * @return  0 on success, negative error code on failure.
  *          -1 = already initialized
- *          -2 = failed to start mouse monitor (check Input Monitoring permissions)
+ *          -2 = failed to start mouse monitor
+ *          -3 = Input Monitoring permission not granted (a system prompt is shown)
+ *          -4 = Screen Recording permission not granted (a system prompt is shown)
  */
 __attribute__((visibility("default")))
 int ScreenGuardInit(ScreenGuardCaptureCallback callback);
@@ -110,7 +116,7 @@ void ScreenGuardShutdown(void);
 
 /**
  * Get the number of detected GPU devices.
- * Must be called after ScreenGuardInit().
+ * May be called before ScreenGuardInit(); GPUs are enumerated on first use.
  */
 __attribute__((visibility("default")))
 int ScreenGuardGetGpuCount(void);

@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Oldest macOS with ScreenCaptureKit. SCScreenshotManager (macOS 14+) is used when
+# available at runtime, with a CGDisplayCreateImage fallback on 12.3–13.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.3" CACHE STRING "Minimum macOS version")
+
 project(ScreenGuardCapture LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -24,7 +29,7 @@ add_library(screencapture SHARED ${SOURCES})
 # Include directories
 target_include_directories(screencapture PUBLIC include)
 
-# Link macOS frameworks
+# Link macOS frameworks (ScreenCaptureKit weak-linked for the pre-14 fallback path)
 target_link_libraries(screencapture
     "-framework CoreGraphics"
     "-framework CoreFoundation"
@@ -32,7 +37,7 @@ target_link_libraries(screencapture
     "-framework Metal"
     "-framework Foundation"
     "-framework ApplicationServices"
-    "-framework ScreenCaptureKit"
+    "-weak_framework ScreenCaptureKit"
 )
 
 # Visibility: hide all symbols by default, export only those marked

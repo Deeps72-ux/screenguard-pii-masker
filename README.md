@@ -2,7 +2,7 @@
 
 [![CI & GitHub Pages Deployment](https://github.com/Deeps72-ux/screenguard-pii-masker/actions/workflows/deploy.yml/badge.svg)](https://github.com/Deeps72-ux/screenguard-pii-masker/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: macOS](https://img.shields.io/badge/Platform-macOS%2014%2B%20%7C%20Apple%20Silicon-black.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-macOS%2012.3%2B%20%7C%20Windows%2010%2F11-black.svg)]()
 [![.NET 8](https://img.shields.io/badge/.NET-8.0%20LTS-purple.svg)]()
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-00F0FF.svg)](https://deeps72-ux.github.io/screenguard-pii-masker/)
 
@@ -141,7 +141,7 @@ Total: 56 bytes
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
-* macOS 14+ (Sonoma or Sequoia)
+* macOS 12.3+ (ScreenCaptureKit screenshots on 14+, Core Graphics fallback on 12.3–13)
 * Xcode Command Line Tools (`xcode-select --install`)
 * CMake 3.20+ (`brew install cmake`)
 * .NET 8 SDK (`brew install dotnet@8`)
@@ -154,6 +154,9 @@ cd screenguard-pii-masker
 
 # Build the C++ native dylib
 ./scripts/build_native.sh
+
+# Download the on-device name-recognition model (~109 MB, pinned + checksum-verified)
+./scripts/download_models.sh
 
 # Build the .NET application
 cd app
@@ -173,12 +176,39 @@ Listens to live mouse clicks (External Mouse or Trackpad), captures the display,
 ```bash
 dotnet run
 ```
-*(Requires Screen Recording and Input Monitoring permissions in **System Settings &rarr; Privacy & Security**).*
+*(Requires **Input Monitoring** and **Screen Recording** for your terminal (or ScreenGuard.app) in **System Settings &rarr; Privacy & Security**; quit and reopen the terminal after granting. The app checks both at startup and exits with a clear message if either is missing.)*
+
+Clicks are captured on a background worker and processed from a queue, so bursts of clicks never stall the system click listener. The display under the cursor is captured at its native pixel resolution (e.g. 2560×1600 on a Retina panel), and click coordinates in reports are in that image's pixels.
 
 #### Single Test Capture
 ```bash
 dotnet run -- --test
 ```
+
+#### Scan an Existing Image
+```bash
+dotnet run -- --scan path/to/screenshot.png
+```
+
+#### Other Options
+```bash
+dotnet run -- --output ./my-output    # custom output directory (also accepted as a bare argument)
+dotnet run -- --no-original           # do not keep the unmasked original screenshot
+```
+
+### Redaction Safety
+* PII patterns match within a single OCR text line and mask only the matched value (labels such as `SSN:` stay readable).
+* Card numbers next to a "Credit Card" / "Card Number" label are masked even if the Luhn checksum fails; unlabelled numbers must pass Luhn.
+* If OCR is unavailable or fails for a capture, the masked output redacts the **entire frame** (`"redactionMode": "full-frame"` in the report) rather than passing PII through.
+* A field whose label is readable but whose value OCR garbled (text selection, caret, cursor) is still masked, including labels clipped at the left screen edge.
+* OCR runs twice per capture (as captured, and a high-contrast copy) to recover text inside selection highlights.
+
+### Person Names (on-device NER)
+Names with a label (`Customer Name:`) or title (`Dr.`) are matched by patterns. Free-standing names — a LinkedIn feed, a chat list, an email header — are found by a BERT named-entity model ([dslim/bert-base-NER](https://huggingface.co/dslim/bert-base-NER), int8 ONNX, MIT) running locally through ONNX Runtime on macOS and Windows. Only person names are masked; companies and places are left visible. The model adds ~0.1–0.7 s per capture.
+
+If the model is missing the app prints a warning and falls back to label/title-based names (`"nameRecognition": "labels-only"` in the report).
+
+**Known limits:** a lone first name in an ambiguous context (e.g. `Manas` in a sentence fragment) may be missed; occasional false positives on product names (e.g. `Ray`). Values whose label is entirely off-screen *and* that are themselves partial (e.g. `…5-6789`) cannot be recognised as PII.
 
 ---
 
@@ -217,12 +247,15 @@ output/
 
 ## 📦 Packaging & GitHub Releases Distribution
 
-ScreenGuard is distributed as standalone, self-contained packages for both **macOS** and **Microsoft Windows (x64)** with zero external runtime requirements.
+ScreenGuard is distributed as standalone, self-contained packages for both **macOS** and **Microsoft Windows (x64)**. The macOS app bundles the .NET runtime, the Tesseract engine (no Homebrew needed) and the name-recognition model. The Windows package bundles the .NET runtime and Tesseract; OCR additionally needs the [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe), which most Windows machines already have.
 
 ### 1. Build Local Release Packages
 ```bash
 # Package for macOS (Apple Silicon arm64 .app, .dmg, .zip)
 ./scripts/package.sh arm64 1.0.0
+
+# Intel Macs: run on an Intel Mac with Homebrew tesseract installed
+./scripts/package.sh x64 1.0.0
 
 # Package for Windows (win-x64 standalone .zip with ScreenGuard.exe)
 ./scripts/package_windows.sh 1.0.0
@@ -240,7 +273,7 @@ Creating and pushing a Git tag triggers the [.github/workflows/release.yml](.git
 git tag v1.0.0
 git push origin v1.0.0
 ```
-This automatically compiles and packages both macOS (DMG + ZIP) and Windows (ZIP) binaries and attaches them to the GitHub Release.
+This builds the macOS (arm64 DMG + ZIP) package on a macOS runner and the Windows (x64 ZIP) package on a Windows runner, runs the OCR/masking benchmark on each (and a live GDI capture on Windows), and attaches the packages to the GitHub Release only if verification passes.
 
 ---
 
@@ -255,8 +288,8 @@ ScreenGuard strictly implements the **SOLID** software engineering principles:
 
 | Operating System | Frame Capture Provider | Global Input Monitor | GPU Hardware Detector |
 | :--- | :--- | :--- | :--- |
-| **macOS 14+** | `MacScreenCaptureService` (ScreenCaptureKit) | `MacGlobalInputMonitor` (CGEventTap) | `MacGpuDetector` (Metal API) |
-| **Windows 10/11** | `WindowsScreenCaptureService` (Win32 GDI / BitBlt) | `WindowsGlobalInputMonitor` (SetWindowsHookEx) | `WindowsGpuDetector` (WMI / DXGI) |
+| **macOS 12.3+** | `MacScreenCaptureService` (ScreenCaptureKit, per-display, native resolution) | `MacGlobalInputMonitor` (CGEventTap + IOKit HID) | `MacGpuDetector` (Metal API) |
+| **Windows 10/11** | `WindowsScreenCaptureService` (Win32 GDI / BitBlt, per-monitor DPI aware) | `WindowsGlobalInputMonitor` (SetWindowsHookEx + Raw Input touchpad detection) | `WindowsGpuDetector` (WMI) |
 
 ## 👥 Author & Repository
 * **GitHub:** [@Deeps72-ux](https://github.com/Deeps72-ux)

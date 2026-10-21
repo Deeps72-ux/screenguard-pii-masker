@@ -18,8 +18,9 @@ dist/
 *.pidb
 *.booproj
 
-# OCR Trained Data (downloaded automatically via scripts)
+# OCR Trained Data and NER model (downloaded automatically via scripts)
 tessdata/*.traineddata
+models/
 
 # Local Output Directories
 output/

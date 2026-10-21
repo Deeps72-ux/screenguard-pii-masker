@@ -41,7 +41,8 @@ fi
 echo "[1/3] Configuring CMake..."
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
-cmake .. -DCMAKE_BUILD_TYPE=Release 2>&1 | sed 's/^/       /'
+# Optional: NATIVE_ARCH=arm64|x86_64 to cross-compile (defaults to the host architecture)
+cmake .. -DCMAKE_BUILD_TYPE=Release ${NATIVE_ARCH:+-DCMAKE_OSX_ARCHITECTURES=$NATIVE_ARCH} 2>&1 | sed 's/^/       /'
 
 echo ""
 echo "[2/3] Compiling..."

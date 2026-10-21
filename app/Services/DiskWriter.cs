@@ -101,7 +101,7 @@ public class DiskWriter : IDiskWriter
     {
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        using var stream = File.OpenWrite(path);
+        using var stream = File.Create(path);
         data.SaveTo(stream);
     }
 }

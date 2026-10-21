@@ -136,11 +136,13 @@ public class ImageComparer : IImageComparer
     {
         var report = new
         {
-            captureId = Path.GetFileNameWithoutExtension(result.OriginalImagePath),
+            captureId = result.CaptureId,
             timestamp = result.Timestamp.ToString("o"),
             inputSource = result.InputSource,
             clickCoordinates = new { x = result.ClickX, y = result.ClickY },
             dimensions = new { width = result.Width, height = result.Height },
+            redactionMode = result.RedactionMode,
+            nameRecognition = result.NameRecognition,
             piiSummary = new
             {
                 totalDetected = piiMatches.Count,
@@ -154,7 +156,7 @@ public class ImageComparer : IImageComparer
             }),
             files = new
             {
-                original = result.OriginalImagePath,
+                original = string.IsNullOrEmpty(result.OriginalImagePath) ? null : result.OriginalImagePath,
                 masked = result.MaskedImagePath,
                 comparison = comparisonImagePath
             }

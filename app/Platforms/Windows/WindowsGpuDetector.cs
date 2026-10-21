@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
 
@@ -38,25 +39,7 @@ public class WindowsGpuDetector : IGpuDetector
                     string gpuName = line.Trim();
                     if (string.IsNullOrWhiteSpace(gpuName)) continue;
 
-                    string lower = gpuName.ToLowerInvariant();
-                    string typeStr;
-                    int typeCode;
-
-                    if (lower.Contains("intel") || lower.Contains("uhd") || lower.Contains("iris") || lower.Contains("integrated"))
-                    {
-                        typeStr = "Integrated";
-                        typeCode = 0;
-                    }
-                    else if (lower.Contains("nvidia") || lower.Contains("geforce") || lower.Contains("rtx") || lower.Contains("gtx") || lower.Contains("radeon"))
-                    {
-                        typeStr = "Discrete";
-                        typeCode = 1;
-                    }
-                    else
-                    {
-                        typeStr = "Discrete";
-                        typeCode = 1;
-                    }
+                    var (typeStr, typeCode) = Classify(gpuName);
 
                     list.Add(new GpuInfoModel
                     {
@@ -76,12 +59,46 @@ public class WindowsGpuDetector : IGpuDetector
         {
             list.Add(new GpuInfoModel
             {
-                Name = "DirectX Display Adapter",
-                Type = "Discrete",
-                TypeCode = 1
+                Name = "Unknown Display Adapter",
+                Type = "Unknown",
+                TypeCode = -1
             });
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Classifies an adapter name. Integrated parts are matched first because AMD and Intel
+    /// both ship integrated and discrete GPUs under the same brand names.
+    /// </summary>
+    internal static (string Type, int Code) Classify(string gpuName)
+    {
+        string lower = gpuName.ToLowerInvariant();
+
+        if (lower.Contains("microsoft basic") || lower.Contains("remote display") || lower.Contains("virtual"))
+            return ("Software", -1);
+
+        // Intel: Arc A-series / B-series cards are discrete; everything else (UHD, Iris, "Arc Graphics") is integrated
+        if (lower.Contains("intel"))
+            return Regex.IsMatch(lower, @"\barc(\(tm\))?\s+[ab]\d{3}") ? ("Discrete", 1) : ("Integrated", 0);
+
+        // AMD: RX / Pro W / FirePro / Instinct are discrete; "Radeon Graphics", Vega N and 6x0M/7x0M/8x0M APUs are integrated
+        if (lower.Contains("radeon") || lower.Contains("amd"))
+        {
+            if (Regex.IsMatch(lower, @"\brx\s*\d|\bpro\s+w\d|firepro|instinct"))
+                return ("Discrete", 1);
+            if (lower.Contains("graphics") || Regex.IsMatch(lower, @"\bvega\s*\d+\b|\b\d{3}m\b"))
+                return ("Integrated", 0);
+            return ("Discrete", 1);
+        }
+
+        if (lower.Contains("nvidia") || lower.Contains("geforce") || lower.Contains("quadro") || lower.Contains("rtx") || lower.Contains("gtx"))
+            return ("Discrete", 1);
+
+        if (lower.Contains("qualcomm") || lower.Contains("adreno"))
+            return ("Integrated", 0);
+
+        return ("Unknown", -1);
     }
 }

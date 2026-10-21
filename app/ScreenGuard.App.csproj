@@ -18,6 +18,9 @@
 
     <!-- Tesseract OCR for text extraction from screenshots -->
     <PackageReference Include="Tesseract" Version="5.2.0" />
+
+    <!-- ONNX Runtime for on-device person-name recognition (NER) -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +28,11 @@
     <None Include="libscreencapture.dylib"
           CopyToOutputDirectory="PreserveNewest"
           Condition="Exists('libscreencapture.dylib')" />
+
+    <!-- Copy NER model (downloaded by scripts/download_models.sh) to output -->
+    <None Include="../models/**"
+          CopyToOutputDirectory="PreserveNewest"
+          LinkBase="models" />
 
     <!-- Copy tessdata directory to output -->
     <None Include="../tessdata/**"
