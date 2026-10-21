@@ -16,6 +16,7 @@
 
 using System.Text.Json;
 using SkiaSharp;
+using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
 
 namespace ScreenGuard.App.Services;
@@ -23,7 +24,7 @@ namespace ScreenGuard.App.Services;
 /// <summary>
 /// Compares original and masked captures, generating visual diffs and audit reports.
 /// </summary>
-public class ImageComparer
+public class ImageComparer : IImageComparer
 {
     private const int HeaderHeight = 50;
     private const int FooterHeight = 44;

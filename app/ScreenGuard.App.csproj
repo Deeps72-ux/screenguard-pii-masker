@@ -14,6 +14,7 @@
     <!-- SkiaSharp for image processing (cross-platform, no System.Drawing dependency) -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
     <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="2.88.8" />
 
     <!-- Tesseract OCR for text extraction from screenshots -->
     <PackageReference Include="Tesseract" Version="5.2.0" />

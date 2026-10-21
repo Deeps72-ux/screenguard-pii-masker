@@ -11,14 +11,16 @@
  */
 
 using SkiaSharp;
+using ScreenGuard.App.Abstractions;
 
 namespace ScreenGuard.App.Services;
 
 /// <summary>
 /// Handles writing captured images and comparison artifacts to disk.
 /// </summary>
-public class DiskWriter
+public class DiskWriter : IDiskWriter
 {
+    public string BaseOutputDir { get; }
     private readonly string _originalDir;
     private readonly string _maskedDir;
     private readonly string _comparisonDir;
@@ -30,6 +32,7 @@ public class DiskWriter
     /// </summary>
     public DiskWriter(string outputBaseDir)
     {
+        BaseOutputDir = outputBaseDir;
         _originalDir = Path.Combine(outputBaseDir, "original");
         _maskedDir = Path.Combine(outputBaseDir, "masked");
         _comparisonDir = Path.Combine(outputBaseDir, "comparison");

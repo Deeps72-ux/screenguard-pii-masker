@@ -10,6 +10,7 @@
  */
 
 using SkiaSharp;
+using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
 
 namespace ScreenGuard.App.Services;
@@ -17,7 +18,7 @@ namespace ScreenGuard.App.Services;
 /// <summary>
 /// Applies visual redaction masks over detected PII regions in screenshots.
 /// </summary>
-public class PiiMasker
+public class PiiMasker : IPiiMasker
 {
     private readonly SKColor _maskColor = SKColors.Black;
     private readonly SKColor _accentColor = new(229, 57, 53); // Crimson Red

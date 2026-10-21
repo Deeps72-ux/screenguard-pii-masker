@@ -19,6 +19,7 @@
  */
 
 using System.Text.RegularExpressions;
+using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
 
 namespace ScreenGuard.App.Services;
@@ -26,7 +27,7 @@ namespace ScreenGuard.App.Services;
 /// <summary>
 /// Detects PII patterns in OCR-extracted text using regular expressions and heuristics.
 /// </summary>
-public class PiiDetector
+public class PiiDetector : IPiiDetector
 {
     private record PatternDefinition(string Type, Regex Pattern, Func<string, bool>? Validator = null);
 

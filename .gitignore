@@ -31,6 +31,5 @@ test_pii.png
 .vscode/
 .idea/
 
-docs/HLD.md
-docs/LLD.md
+
 docs/DEMO_GUIDE.md

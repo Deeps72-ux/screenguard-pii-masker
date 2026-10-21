@@ -217,17 +217,21 @@ output/
 
 ## 📦 Packaging & GitHub Releases Distribution
 
-ScreenGuard can be packaged as a standalone macOS `.app` bundle, a drag-and-drop `.dmg` installer, and a `.zip` archive containing both `ScreenGuard` and `libscreencapture.dylib` with zero external .NET runtime requirements.
+ScreenGuard is distributed as standalone, self-contained packages for both **macOS** and **Microsoft Windows (x64)** with zero external runtime requirements.
 
 ### 1. Build Local Release Packages
 ```bash
-# Package for Apple Silicon (macOS arm64)
+# Package for macOS (Apple Silicon arm64 .app, .dmg, .zip)
 ./scripts/package.sh arm64 1.0.0
 
-# Outputs generated in dist/:
+# Package for Windows (win-x64 standalone .zip with ScreenGuard.exe)
+./scripts/package_windows.sh 1.0.0
+
+# Generated artifacts in dist/:
 #   • dist/ScreenGuard.app
 #   • dist/ScreenGuard-macOS-arm64-v1.0.0.dmg
 #   • dist/ScreenGuard-macOS-arm64-v1.0.0.zip
+#   • dist/ScreenGuard-Windows-x64-v1.0.0.zip
 ```
 
 ### 2. Automated Distribution via GitHub Actions
@@ -236,9 +240,23 @@ Creating and pushing a Git tag triggers the [.github/workflows/release.yml](.git
 git tag v1.0.0
 git push origin v1.0.0
 ```
-This automatically compiles on a macOS Apple Silicon runner, runs verification benchmarks, creates a GitHub Release, and publishes the `.dmg` and `.zip` binaries.
+This automatically compiles and packages both macOS (DMG + ZIP) and Windows (ZIP) binaries and attaches them to the GitHub Release.
 
 ---
+
+## 🏛️ SOLID Architecture & Platform Abstraction
+
+ScreenGuard strictly implements the **SOLID** software engineering principles:
+* **Single Responsibility (SRP):** Distinct services for capture, OCR extraction, PII pattern detection, image redaction, side-by-side comparison, and disk writing.
+* **Open/Closed (OCP):** Open to new operating systems or capture backends without modifying existing domain logic.
+* **Liskov Substitution (LSP):** `WindowsGlobalInputMonitor` and `MacGlobalInputMonitor` seamlessly substitute `IGlobalInputMonitor`.
+* **Interface Segregation (ISP):** Small, focused interfaces (`IScreenCaptureService`, `IGlobalInputMonitor`, `IGpuDetector`, `IPiiDetector`, `IPiiMasker`, `IImageComparer`, `IDiskWriter`).
+* **Dependency Inversion (DIP):** High-level orchestrators depend strictly on abstractions via `PlatformFactory`.
+
+| Operating System | Frame Capture Provider | Global Input Monitor | GPU Hardware Detector |
+| :--- | :--- | :--- | :--- |
+| **macOS 14+** | `MacScreenCaptureService` (ScreenCaptureKit) | `MacGlobalInputMonitor` (CGEventTap) | `MacGpuDetector` (Metal API) |
+| **Windows 10/11** | `WindowsScreenCaptureService` (Win32 GDI / BitBlt) | `WindowsGlobalInputMonitor` (SetWindowsHookEx) | `WindowsGpuDetector` (WMI / DXGI) |
 
 ## 👥 Author & Repository
 * **GitHub:** [@Deeps72-ux](https://github.com/Deeps72-ux)

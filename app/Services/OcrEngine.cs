@@ -47,8 +47,10 @@ public class OcrResult
 
 /// <summary>
 /// Production-grade OCR engine wrapper.
+/// <summary>
+/// Production-grade OCR engine wrapper.
 /// </summary>
-public class OcrEngine : IDisposable
+public class OcrEngine : ScreenGuard.App.Abstractions.IOcrEngine
 {
     private readonly string? _tessDataPath;
     private readonly string? _tesseractBinaryPath;
@@ -68,11 +70,14 @@ public class OcrEngine : IDisposable
     {
         _tessDataPath = tessDataPath;
 
-        // Find tesseract binary on system (check common macOS paths)
+        // Find tesseract binary on system (check common macOS and Windows paths)
         string[] candidateBinaries =
         [
             "/opt/homebrew/bin/tesseract",
             "/usr/local/bin/tesseract",
+            @"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            @"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            "tesseract.exe",
             "tesseract"
         ];
 

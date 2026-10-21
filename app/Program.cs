@@ -22,21 +22,25 @@
 
 using System.Runtime.InteropServices;
 using SkiaSharp;
-using ScreenGuard.App.Interop;
+using ScreenGuard.App.Abstractions;
 using ScreenGuard.App.Models;
+using ScreenGuard.App.Platforms;
 using ScreenGuard.App.Services;
 
 namespace ScreenGuard.App;
 
 class Program
 {
-    // ── Services ────────────────────────────────────────────────────────
+    // ── Services (Abstracted for SOLID & Cross-Platform Support) ─────────
     private static readonly ImageConverter _imageConverter = new();
-    private static readonly PiiDetector _piiDetector = new();
-    private static readonly PiiMasker _piiMasker = new();
-    private static readonly ImageComparer _imageComparer = new();
-    private static OcrEngine? _ocrEngine;
-    private static DiskWriter _diskWriter = null!;
+    private static readonly IPiiDetector _piiDetector = new PiiDetector();
+    private static readonly IPiiMasker _piiMasker = new PiiMasker();
+    private static readonly IImageComparer _imageComparer = new ImageComparer();
+    private static IOcrEngine? _ocrEngine;
+    private static IDiskWriter _diskWriter = null!;
+    private static IScreenCaptureService _captureService = null!;
+    private static IGlobalInputMonitor _inputMonitor = null!;
+    private static IGpuDetector _gpuDetector = null!;
 
     // ── State ───────────────────────────────────────────────────────────
     private static int _captureCount = 0;
@@ -103,26 +107,28 @@ class Program
             return;
         }
 
-        // ── Initialize Native C++ Layer ─────────────────────────────────
-        NativeInterop.ScreenGuardCaptureCallback callback = OnCapture;
-        GCHandle callbackHandle = GCHandle.Alloc(callback);
+        // ── Initialize Cross-Platform Services ──────────────────────────
+        _captureService = PlatformFactory.CreateCaptureService();
+        _inputMonitor = PlatformFactory.CreateInputMonitor(_captureService);
+        _gpuDetector = PlatformFactory.CreateGpuDetector();
 
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("[*] Initializing native C++ layer (libscreencapture.dylib)...");
-        Console.ResetColor();
-
-        int result = NativeInterop.ScreenGuardInit(callback);
-        if (result != 0)
+        _inputMonitor.OnFrameCaptured += frame =>
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"[✗] Failed to initialize native layer (error code: {result}).");
-            Console.WriteLine("    Possible causes:");
-            Console.WriteLine("    • Input Monitoring permission missing (System Settings → Privacy & Security → Input Monitoring)");
-            Console.WriteLine("    • Screen Recording permission missing (System Settings → Privacy & Security → Screen Recording)");
-            Console.ResetColor();
-            callbackHandle.Free();
-            return;
-        }
+            using (frame)
+            {
+                int count = Interlocked.Increment(ref _captureCount);
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine();
+                Console.WriteLine($"┌─ Capture #{count} ──────────────────────────────────────────");
+                Console.WriteLine($"│  Platform:        {PlatformFactory.PlatformName}");
+                Console.WriteLine($"│  Click Position:  ({frame.ClickX:F0}, {frame.ClickY:F0})");
+                Console.WriteLine($"│  Input Device:    {frame.InputSource}");
+                Console.WriteLine($"│  Resolution:      {frame.Width}x{frame.Height}");
+                Console.ResetColor();
+
+                ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs);
+            }
+        };
 
         // ── Print GPU Information ───────────────────────────────────────
         PrintGpuInfo();
@@ -131,10 +137,26 @@ class Program
         if (testMode)
         {
             RunSingleCaptureTest();
-            NativeInterop.ScreenGuardShutdown();
-            callbackHandle.Free();
             _ocrEngine?.Dispose();
             PrintSessionSummary();
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"[*] Initializing {PlatformFactory.PlatformName} capture layer...");
+        Console.ResetColor();
+
+        if (!_inputMonitor.Start())
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[✗] Failed to initialize input monitoring on {PlatformFactory.PlatformName}.");
+            if (PlatformFactory.IsMacOS)
+            {
+                Console.WriteLine("    Possible causes:");
+                Console.WriteLine("    • Input Monitoring permission missing (System Settings → Privacy & Security → Input Monitoring)");
+                Console.WriteLine("    • Screen Recording permission missing (System Settings → Privacy & Security → Screen Recording)");
+            }
+            Console.ResetColor();
             return;
         }
 
@@ -170,67 +192,14 @@ class Program
 
         // ── Shutdown ────────────────────────────────────────────────────
         Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("\n[*] Shutting down native monitoring...");
+        Console.WriteLine("\n[*] Shutting down input monitoring...");
         Console.ResetColor();
 
-        NativeInterop.ScreenGuardShutdown();
-        callbackHandle.Free();
+        _inputMonitor.Stop();
+        _inputMonitor.Dispose();
         _ocrEngine?.Dispose();
 
         PrintSessionSummary();
-    }
-
-    /// <summary>
-    /// Callback invoked by the native C++ layer on each mouse click.
-    /// </summary>
-    private static void OnCapture(IntPtr capturePtr)
-    {
-        try
-        {
-            var capture = Marshal.PtrToStructure<NativeInterop.ScreenGuardCaptureStruct>(capturePtr);
-            int count = Interlocked.Increment(ref _captureCount);
-
-            string inputSource = capture.InputSource switch
-            {
-                1 => "External Mouse",
-                2 => "Trackpad",
-                _ => "Unknown"
-            };
-
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine();
-            Console.WriteLine($"┌─ Capture #{count} ──────────────────────────────────────────");
-            Console.WriteLine($"│  Click Position:  ({capture.ClickX:F0}, {capture.ClickY:F0})");
-            Console.WriteLine($"│  Input Device:    {inputSource}");
-            Console.WriteLine($"│  Resolution:      {capture.Width}x{capture.Height} (Stride: {capture.Stride})");
-            Console.ResetColor();
-
-            // Convert raw buffer to SKBitmap
-            using var bitmap = _imageConverter.FromRawBgra(
-                capture.PixelData, capture.Width, capture.Height, capture.Stride);
-
-            if (bitmap == null)
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("│  [✗] Failed to convert raw pixel buffer to bitmap.");
-                Console.WriteLine("└───────────────────────────────────────────────────────");
-                Console.ResetColor();
-                return;
-            }
-
-            ProcessCapture(bitmap, inputSource, capture.ClickX, capture.ClickY, capture.TimestampMs);
-        }
-        catch (Exception ex)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"[✗] Error processing capture: {ex.Message}");
-            Console.ResetColor();
-        }
-        finally
-        {
-            // CRITICAL: Always free native memory
-            NativeInterop.ScreenGuardFreeCapture(capturePtr);
-        }
     }
 
     /// <summary>
@@ -366,45 +335,24 @@ class Program
     }
 
     /// <summary>
-    /// Runs a single screen capture test using ScreenGuardCaptureNow().
+    /// Runs a single screen capture test using the cross-platform capture service.
     /// </summary>
     private static void RunSingleCaptureTest()
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("\n[*] Executing single test screen capture via ScreenGuardCaptureNow()...");
+        Console.WriteLine($"\n[*] Executing single test screen capture via {_captureService.GetType().Name}...");
         Console.ResetColor();
 
-        IntPtr capturePtr = NativeInterop.ScreenGuardCaptureNow();
-        if (capturePtr == IntPtr.Zero)
+        using var frame = _captureService.CaptureScreen();
+        if (frame == null)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("[✗] ScreenGuardCaptureNow() returned null.");
+            Console.WriteLine("[✗] Screen capture returned null.");
             Console.ResetColor();
             return;
         }
 
-        try
-        {
-            var capture = Marshal.PtrToStructure<NativeInterop.ScreenGuardCaptureStruct>(capturePtr);
-            string inputSource = capture.InputSource switch
-            {
-                1 => "External Mouse",
-                2 => "Trackpad",
-                _ => "Manual/Test"
-            };
-
-            using var bitmap = _imageConverter.FromRawBgra(
-                capture.PixelData, capture.Width, capture.Height, capture.Stride);
-
-            if (bitmap != null)
-            {
-                ProcessCapture(bitmap, inputSource, 0, 0, capture.TimestampMs);
-            }
-        }
-        finally
-        {
-            NativeInterop.ScreenGuardFreeCapture(capturePtr);
-        }
+        ProcessCapture(frame.Bitmap, frame.InputSource, frame.ClickX, frame.ClickY, frame.TimestampMs);
     }
 
     /// <summary>
@@ -507,32 +455,22 @@ class Program
     }
 
     /// <summary>
-    /// Displays GPU information retrieved from the native Metal API.
+    /// Displays GPU information retrieved from the cross-platform GPU detector.
     /// </summary>
     private static void PrintGpuInfo()
     {
-        int count = NativeInterop.ScreenGuardGetGpuCount();
-        if (count <= 0) return;
+        var gpus = _gpuDetector.DetectGpus();
+        if (gpus.Count == 0) return;
 
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
-        Console.WriteLine("║  GPU Information (Metal API)                                  ║");
+        Console.WriteLine($"║  GPU Information ({PlatformFactory.PlatformName,-43}) ║");
         Console.WriteLine("╠═══════════════════════════════════════════════════════════════╣");
 
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < gpus.Count; i++)
         {
-            if (NativeInterop.ScreenGuardGetGpuInfo(i, out var info) == 0)
-            {
-                string typeStr = info.Type switch
-                {
-                    0 => "Integrated (iGPU)",
-                    1 => "Discrete (dGPU)",
-                    2 => "External (eGPU)",
-                    _ => "Unknown"
-                };
-
-                Console.WriteLine($"║  GPU {i}: {info.Name,-36} [{typeStr,-16}] ║");
-            }
+            var gpu = gpus[i];
+            Console.WriteLine($"║  GPU {i}: {gpu.Name,-36} [{gpu.Type,-16}] ║");
         }
 
         Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");

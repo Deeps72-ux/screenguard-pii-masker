@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-and-release:
-    name: Build & Release macOS Apple Silicon (arm64)
+    name: Build & Release Multi-Platform Packages (macOS & Windows)
     runs-on: macos-14
     steps:
       - name: Checkout Repository
@@ -45,20 +45,25 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Build & Package (App, ZIP, DMG)
+      - name: Build & Package macOS (App, ZIP, DMG)
         run: |
           chmod +x ./scripts/package.sh ./scripts/build_native.sh
           ./scripts/package.sh arm64 ${{ steps.ver.outputs.version }}
 
-      - name: Verify Packaged Application
+      - name: Build & Package Windows (win-x64 ZIP)
+        run: |
+          chmod +x ./scripts/package_windows.sh
+          ./scripts/package_windows.sh ${{ steps.ver.outputs.version }}
+
+      - name: Verify macOS Packaged Application
         run: |
           ./dist/ScreenGuard.app/Contents/MacOS/ScreenGuard --benchmark
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || format('v{0}', steps.ver.outputs.version) }}
-          name: ScreenGuard v${{ steps.ver.outputs.version }} (macOS Apple Silicon)
+          name: ScreenGuard v${{ steps.ver.outputs.version }} (macOS & Windows)
           draft: false
           prerelease: false
           generate_release_notes: true
